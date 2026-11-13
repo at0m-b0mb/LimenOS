@@ -334,13 +334,13 @@ CONFIG = {
     # text and sits on the loading screen forever -- it does not crash, so
     # there is nothing in dmesg to find. The installer copies a font off the
     # device rather than redistributing a typeface with the project.
-    "title":       {"font": "limen.ttf", "size": 28, "color": "#1B1813"},
-    "hint":        {"font": "limen.ttf", "size": 22, "color": "#6B6554"},
+    "title":       {"font": "limen.ttf", "size": 30, "color": "#1B1813"},
+    "hint":        {"font": "limen.ttf", "size": 24, "color": "#6B6554"},
     "currentpage": {"color": "#1B1813"},
     "total":       {"color": "#7A5D18"},
-    "grid":        {"font": "limen.ttf", "grid1x4": 24, "grid3x4": 17,
+    "grid":        {"font": "limen.ttf", "grid1x4": 26, "grid3x4": 18,
                     "color": "#575144", "selectedcolor": "#1B1813"},
-    "list":        {"font": "limen.ttf", "size": 25, "color": "#1B1813"},
+    "list":        {"font": "limen.ttf", "size": 27, "color": "#1B1813"},
 }
 
 

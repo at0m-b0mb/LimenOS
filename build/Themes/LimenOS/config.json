@@ -23,12 +23,12 @@
     },
     "title": {
         "font": "limen.ttf",
-        "size": 28,
+        "size": 30,
         "color": "#1B1813"
     },
     "hint": {
         "font": "limen.ttf",
-        "size": 22,
+        "size": 24,
         "color": "#6B6554"
     },
     "currentpage": {
@@ -39,14 +39,14 @@
     },
     "grid": {
         "font": "limen.ttf",
-        "grid1x4": 24,
-        "grid3x4": 17,
+        "grid1x4": 26,
+        "grid3x4": 18,
         "color": "#575144",
         "selectedcolor": "#1B1813"
     },
     "list": {
         "font": "limen.ttf",
-        "size": 25,
+        "size": 27,
         "color": "#1B1813"
     }
 }
