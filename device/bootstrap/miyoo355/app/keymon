@@ -1,0 +1,7 @@
+#!/bin/sh
+# LimenOS shim. runmiyoo.sh calls ${CUSTOMER_DIR}/app/keymon before MainUI and
+# retries 8 times at 0.5s intervals when it is missing — about 4 seconds wasted
+# per absent binary, and keymon/miyoo_inputd are what make the buttons work.
+# Handing straight back to the internal binary keeps the console correct and
+# the boot fast, without copying any vendor binary onto the card.
+exec /usr/miyoo/bin/keymon "$@"
