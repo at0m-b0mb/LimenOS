@@ -8,8 +8,8 @@ where possible.
 
 | Ceiling | Measurement | Consequence |
 |---|---|---|
-| **~1 GB LPDDR4** | board spec | No large-wordlist work in RAM. ZRAM + an SD swapfile are mandatory, and SD swap is slow enough to feel. Big `nmap` sweeps and `bettercap` with many modules will OOM. |
-| **4× Cortex-A55 @ 1.8 GHz** | DTB / U-Boot | ~1/10th a laptop core for crypto. Handshake cracking is measured in *weeks*, not hours. |
+| **957 MB usable RAM, and NO swap configured by default** | measured on device | `zram0` exists but is unused out of the box — a real hazard. With `limen-zram on` (768 MB lz4) the ceiling measured **~1500 MB allocated**, ~57% over physical. But the test data compressed ~6:1 because it was mostly zeros, so **treat 1.5 GB as optimistic**, not a budget. Big `nmap` sweeps and `bettercap` with many modules will still OOM. |
+| **4× Cortex-A55 @ 1.992 GHz — but only 2 online by stock** | measured on device | ~1/10th a laptop core for crypto; handshake cracking is measured in *weeks*. **The stock firmware leaves cores 2–3 offline**; `limen-cores all` recovers **2.26×** parallel throughput for ~1 °C (see `docs/07`). Single-thread speed does not change. |
 | **Mali-G52 2EE, no usable compute** | board spec | **hashcat will not GPU-accelerate here.** Not "needs drivers" — there is no supported OpenCL path. Treat as CPU-only, then don't crack on it at all. |
 | **128 MB SPI NAND** | updater script | The OS cannot live internally. Everything is on SD, forever. |
 | **3000 mAh / 11.1 Wh** | board spec | An external Alfa in continuous monitor mode is a ~2 W load on top of the SoC. Budget **1.5–3 h** of real field work, less with injection. |
@@ -81,8 +81,12 @@ hardware.
   others, but moving off the BSP kernel risks video decode, suspend quality and
   battery reporting. M1 keeps the stock kernel precisely so you have a working
   fallback card while M2 is unstable.
-- **Thermals.** A handheld in a plastic clamshell with no fan, running a radio
-  flat out. Sustained captures will throttle. Unmeasured — measure it.
+- **Thermals — partly measured.** Four cores at full load reached **79 °C in
+  3 minutes with no frequency throttling** (trip points 75/85/115 °C), and it
+  cooled to 56 °C within 20 seconds of idle. But three minutes is not an
+  endurance test: it is already past the first passive trip point, in a plastic
+  clamshell with no fan. **Longer runs remain unmeasured** — assume they
+  throttle until shown otherwise.
 
 ## Things we are deliberately not building
 

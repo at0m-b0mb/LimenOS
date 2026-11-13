@@ -56,6 +56,11 @@ exactly.
 | `AF_PACKET` capture | live traffic captured, **zero dropped packets** |
 | Which radio | `0bda:b733` — **RTL8733BU**, dual-band (14 × 2.4 GHz, 28 × 5 GHz) |
 | **Monitor mode** | ❌ **NOT SUPPORTED — measured** |
+| Security toolkit | **34 / 34 tools execute** |
+| BadUSB / HID gadget | works — `/dev/hidg0`, correct keycodes |
+| CPU | **2 of 4 cores were offline**; enabling them = **2.26×** |
+| zram | 1500 MB allocated on a 957 MB machine |
+| Thermals | 79 °C after 3 min at full load, no throttling |
 
 ```
 # iw phy phy1 interface add mon0 type monitor
@@ -67,7 +72,8 @@ was previously documented as "plausible but unproven"; it is now proven,
 negatively. No userland tooling changes it — it needs a different driver,
 which needs a different kernel. **That is exactly what M2 is for.**
 
-Full measurements: [docs/01 §8](docs/01-hardware-ground-truth.md).
+Full measurements: [docs/01 §8](docs/01-hardware-ground-truth.md) and the
+[hardware test report](docs/07-hardware-test-report.md).
 
 ## Measured, not assumed
 

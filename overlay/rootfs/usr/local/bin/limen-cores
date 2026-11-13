@@ -1,0 +1,49 @@
+#!/bin/sh
+# ============================================================================
+# limen-cores — the Miyoo Flip ships with half its CPU switched off.
+# ============================================================================
+#   limen-cores status      what is online now
+#   limen-cores all         bring every core online   (measured 2.26x)
+#   limen-cores stock       back to the factory 2
+#
+# MEASURED on hardware, 2026-11-13 (docs/07-hardware-test-report.md):
+#   4 parallel SHA-512 workers    2 cores 4.486s   ->   4 cores 1.986s
+#   single worker                 1.37s            ->   1.30s  (unchanged)
+#   cost                          about 1 C
+#
+# Single-thread speed does not change, so this only helps parallel work.
+# Miyoo presumably disabled them for battery or thermals; under sustained
+# four-core load the SoC reached 79 C without throttling, but that was a
+# three-minute test, not an endurance one. Prefer "all" for a burst of work
+# and "stock" when you want the battery to last.
+set -u
+CPUDIR=/sys/devices/system/cpu
+
+show() {
+    echo "  online  : $(cat $CPUDIR/online)"
+    echo "  present : $(cat $CPUDIR/present)"
+    for c in $CPUDIR/cpu[0-9]*; do
+        n=$(basename "$c")
+        o=$(cat "$c/online" 2>/dev/null || echo 1)
+        f=$(cat "$c/cpufreq/scaling_cur_freq" 2>/dev/null)
+        printf "  %-5s online=%s  %s MHz\n" "$n" "$o" "$((${f:-0}/1000))"
+    done
+    echo "  governor: $(cat $CPUDIR/cpu0/cpufreq/scaling_governor 2>/dev/null)"
+    for z in /sys/class/thermal/thermal_zone*; do
+        [ -r "$z/temp" ] && echo "  $(cat $z/type): $(( $(cat $z/temp)/1000 ))C"
+    done
+}
+
+case "${1:-status}" in
+    all)
+        for c in $CPUDIR/cpu[0-9]*; do
+            [ -w "$c/online" ] && echo 1 > "$c/online" 2>/dev/null
+        done
+        echo "all cores online:"; show ;;
+    stock)
+        for c in $CPUDIR/cpu2 $CPUDIR/cpu3; do
+            [ -w "$c/online" ] && echo 0 > "$c/online" 2>/dev/null
+        done
+        echo "back to the factory configuration:"; show ;;
+    *) show ;;
+esac
