@@ -12,6 +12,23 @@ echo "=== LimenOS Deck $(date 2>/dev/null) ==="
 
 # cores up, zram on, ssh up, and mount the LimenOS card if it is in a slot
 for c in 2 3; do echo 1 > /sys/devices/system/cpu/cpu$c/online 2>/dev/null; done
+
+# Reinstall the SSH key. /root is a read-only squashfs so it has to be a
+# bind-mount over a writable copy, which lives in tmpfs and therefore does
+# NOT survive a reboot. Doing it here means SSH works after every boot
+# without ever typing the device password.
+# Dropbear silently ignores authorized_keys when the home or .ssh directory
+# is group/world writable, so the 0700 modes below are load-bearing.
+if [ -f "$PROGDIR/authorized_keys" ] && [ ! -f /root/.ssh/authorized_keys ]; then
+    mkdir -p /tmp/limen-root
+    cp -a /root/. /tmp/limen-root/ 2>/dev/null
+    mkdir -p /tmp/limen-root/.ssh
+    chmod 700 /tmp/limen-root /tmp/limen-root/.ssh
+    cp "$PROGDIR/authorized_keys" /tmp/limen-root/.ssh/authorized_keys
+    chmod 600 /tmp/limen-root/.ssh/authorized_keys
+    chown -R 0:0 /tmp/limen-root 2>/dev/null
+    mount --bind /tmp/limen-root /root && echo "ssh key reinstalled"
+fi
 pgrep dropbear >/dev/null 2>&1 || /etc/init.d/S50dropbear start >/dev/null 2>&1
 
 ROOTDEV=$(blkid 2>/dev/null | sed -n 's|^\([^:]*\):.*LABEL="LIMEN_ROOT".*|\1|p' | head -1)

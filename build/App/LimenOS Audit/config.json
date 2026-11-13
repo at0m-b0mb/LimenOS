@@ -1,0 +1,7 @@
+{
+ "label": "LimenOS Audit",
+ "icon": "icon.png",
+ "iconsel": "iconsel.png",
+ "launch": "launch.sh",
+ "description": "Check this handheld's own security posture"
+}

@@ -1,0 +1,7 @@
+{
+ "label": "LimenOS Ports",
+ "icon": "icon.png",
+ "iconsel": "iconsel.png",
+ "launch": "launch.sh",
+ "description": "USB devices, serial adapters and open ports"
+}

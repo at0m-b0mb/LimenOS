@@ -1,0 +1,7 @@
+{
+ "label": "LimenOS WiFi Survey",
+ "icon": "icon.png",
+ "iconsel": "iconsel.png",
+ "launch": "launch.sh",
+ "description": "List the networks around you, with signal and security"
+}

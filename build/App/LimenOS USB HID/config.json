@@ -1,0 +1,7 @@
+{
+ "label": "LimenOS USB HID",
+ "icon": "icon.png",
+ "iconsel": "iconsel.png",
+ "launch": "launch.sh",
+ "description": "Arm or disarm the USB keyboard gadget"
+}

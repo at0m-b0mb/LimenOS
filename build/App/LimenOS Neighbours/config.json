@@ -1,0 +1,7 @@
+{
+ "label": "LimenOS Neighbours",
+ "icon": "icon.png",
+ "iconsel": "iconsel.png",
+ "launch": "launch.sh",
+ "description": "Which devices are on your network"
+}
