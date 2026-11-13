@@ -141,16 +141,34 @@ ${P1_START},${P1_SIZE},c,*
 ${P2_START},${P2_SIZE},83
 ${P3_START},${P3_SIZE},c
 EOF
-    dd if=p1.img of="$IMG" bs=$SECT seek=$P1_START conv=notrunc status=none
-    dd if=p2.img of="$IMG" bs=$SECT seek=$P2_START conv=notrunc status=none
-    dd if=p3.img of="$IMG" bs=$SECT seek=$P3_START conv=notrunc status=none
+    # bs MUST be large. The first version used bs=$SECT (512) because the
+    # seeks are expressed in sectors, which meant 16.7 million syscalls for an
+    # 8 GiB partition and ~105 million for a 50 GiB one. Every partition here
+    # starts on an exact MiB boundary, so seek in MiB and move real blocks.
+    MIB=1048576
+    P1_MIB=$(( P1_START * SECT / MIB ))
+    P2_MIB=$(( P2_START * SECT / MIB ))
+    P3_MIB=$(( P3_START * SECT / MIB ))
+
+    # p3 is mostly empty FAT clusters written into an already-zeroed sparse
+    # file, so only its metadata head has to be copied. 256 MiB is far more
+    # than the two FATs plus reserved sectors need, at any cluster size.
+    P3_HEAD_MIB=256
+
+    dd if=p1.img of="$IMG" bs=1M seek=$P1_MIB conv=notrunc status=none
+    echo "[limen] p1 written (32 MiB)"
+    dd if=p2.img of="$IMG" bs=1M seek=$P2_MIB conv=notrunc status=none
+    echo "[limen] p2 written ($(( ROOT_GIB )) GiB)"
+    dd if=p3.img of="$IMG" bs=1M seek=$P3_MIB count=$P3_HEAD_MIB conv=notrunc status=none
+    echo "[limen] p3 metadata written (${P3_HEAD_MIB} MiB head; tail is already zero)"
     sync
 
     echo "[limen] partition table:"
     sfdisk -l "$IMG"
     # The tail of p3 is empty FAT clusters; only its header+FATs matter.
     # Report how little actually has to reach the card.
-    MIN=$(( (P3_START + 131072) * SECT ))
+    # must cover the p3 metadata head, not an unrelated 64 MiB guess
+    MIN=$(( P3_START * SECT + P3_HEAD_MIB * MIB + 64 * MIB ))
     echo "MIN_WRITE_BYTES=$MIN" > /out/min-write.txt
     echo "[limen] minimum bytes that must be written: $MIN ($(( MIN / 1024 / 1024 )) MiB)"
     echo "[limen] filesystem check (ext4):"
