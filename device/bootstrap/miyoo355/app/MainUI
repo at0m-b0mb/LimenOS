@@ -27,13 +27,26 @@ if [ ! -f /root/.ssh/authorized_keys ]; then
     mkdir -p /tmp/limen-root
     cp -a /root/. /tmp/limen-root/ 2>/dev/null
     mkdir -p /tmp/limen-root/.ssh
+    # Dropbear REFUSES a key when the home directory, .ssh or authorized_keys
+    # is writable by group or other. Boot scripts often run with umask 0000,
+    # which makes mkdir produce 0777 and the key is silently ignored — the
+    # client just sees "Permission denied (publickey)". Set all three.
+    chmod 700 /tmp/limen-root
+    chown 0:0 /tmp/limen-root 2>/dev/null
     cat > /tmp/limen-root/.ssh/authorized_keys <<'KEYEOF'
 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFPHRXdNECX9sTsJxT/weLuPeFkzYL5pefB39K0UTTqk limenos-flip
 KEYEOF
     chmod 700 /tmp/limen-root/.ssh
     chmod 600 /tmp/limen-root/.ssh/authorized_keys
-    mount --bind /tmp/limen-root /root && echo "ssh key installed"
+    chown -R 0:0 /tmp/limen-root/.ssh 2>/dev/null
+    if mount --bind /tmp/limen-root /root; then
+        echo "ssh key: bind-mounted /root"
+    else
+        echo "ssh key: BIND MOUNT FAILED"
+    fi
 fi
+echo "ssh key: /root/.ssh/authorized_keys -> $(ls -ld /root /root/.ssh /root/.ssh/authorized_keys 2>&1 | tr '\n' ' ')"
+
 pgrep dropbear >/dev/null 2>&1 || /etc/init.d/S50dropbear start 2>/dev/null
 
 # --- USB serial console  (OPT-IN) ------------------------------------------
