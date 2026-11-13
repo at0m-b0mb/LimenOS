@@ -11,7 +11,7 @@ from __future__ import annotations
 import json, os, sys, math
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFont
 import themekit_assets as A
 import themekit as T          # reuse the core generators already written
 
@@ -174,6 +174,28 @@ def arrow(path, w, h, dirn):
     A._save(img, w, h, path)
 
 
+def wordmark(path, w, h):
+    """The LimenOS wordmark on transparency, for the vendor logo slot.
+
+    miyoo-topbar.png is drawn in the TOP-LEFT corner. An opaque bordered
+    panel there reads as a stray block with nothing in it, which is exactly
+    what it looked like on the device. Either the slot says something or it
+    shows nothing; it must not be an empty box.
+    """
+    img = A._new(w, h)
+    d = ImageDraw.Draw(img)
+    W, H = w * A.SS, h * A.SS
+    try:
+        f = ImageFont.truetype(A.SERIF, int(H * 0.50))
+    except Exception:
+        f = ImageFont.load_default()
+    d.text((W * 0.04, H * 0.44), "LimenOS", font=f, fill=A.INK, anchor="lm")
+    tw = d.textlength("LimenOS", font=f)
+    d.rectangle([W * 0.04, H * 0.72, W * 0.04 + tw, H * 0.72 + max(2, int(H * 0.055))],
+                fill=A.BRASS)
+    A._save(img, w, h, path)
+
+
 def build(out):
     skin = os.path.join(out, "skin")
     hd   = os.path.join(out, "skin_1080p")
@@ -294,8 +316,8 @@ def build(out):
     A.panel(S("color.png"), 44, 44, radius=8, fill=A.BRASS, outline=A.BRASS)
     A.panel(D("color.png"), 60, 60, radius=10, fill=A.BRASS, outline=A.BRASS)
     A.panel(S("bg-keysetting-f.png"), 160, 60, radius=10, fill=A.BRASS, outline=A.BRASS)
-    A.panel(S("miyoo-topbar.png"), 152, 42, radius=8, fill=A.PAPER)
-    A.panel(D("miyoo-topbar.png"), 282, 60, radius=10, fill=A.PAPER)
+    wordmark(S("miyoo-topbar.png"), 152, 42)
+    wordmark(D("miyoo-topbar.png"), 282, 60)
     A.panel(D("search-keyboard-bg.png"), 780, 884, radius=16)
     A.panel(D("bg-ra-list-item.png"), 499, 239, radius=14)
     A.panel(D("num-bg.png"), 248, 100, radius=20, fill=A.BRASS, outline=A.BRASS)

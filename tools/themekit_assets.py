@@ -295,3 +295,9 @@ def mask_shape(path, w, h, selected):
     d.rounded_rectangle([1, 1, W - 2, H - 2], radius=int(min(W, H) * 0.30),
                         fill=BRASS if selected else RULE_S)
     _save(img, w, h, path)
+
+
+def clear_png(path, w, h):
+    """A fully transparent PNG, for slots that must occupy space but show
+    nothing. An opaque fill in one of these reads as a stray bar."""
+    _save(_new(w, h, CLEAR), w, h, path)

@@ -359,7 +359,10 @@ def build(out):
 
     bar(640, 60, S("bg-title.png"), strong=True)
     bar(640, 60, S("tips-bar-bg.png"))
-    bar(320, 38, S("barbg.png"))
+    # barbg sits under the status row in the TOP-LEFT. An opaque fill there
+    # reads as a stray bar across the corner, which is what it looked like on
+    # the device. A slot that must exist but show nothing is transparent.
+    plain(320, 38, S("barbg.png"), fill=CLEAR)
 
     list_item(640, 90, S("bg-list-l.png"))
     list_item(640, 56, S("bg-list-s.png"))
