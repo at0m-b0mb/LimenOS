@@ -101,7 +101,11 @@ EOF
 
     # --- p1: boot ----------------------------------------------------------
     truncate -s $(( P1_SIZE * SECT )) p1.img
-    mkfs.vfat -F32 -n LIMEN_BOOT p1.img >/dev/null
+    # FAT16, not FAT32. FAT32 needs at least 65525 clusters; a 32 MiB
+    # partition only reaches that with 512-byte clusters, so mkfs picks a
+    # larger cluster size and produces a FAT32 filesystem that is out of spec.
+    # macOS refuses to mount it. FAT16 is correct at this size.
+    mkfs.vfat -F16 -n LIMEN_BOOT p1.img >/dev/null
     mkdir -p $WORK/boot
     cat > $WORK/boot/README.txt <<EOF
 LIMEN_BOOT — empty at M1 by design.
