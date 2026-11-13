@@ -1,0 +1,59 @@
+#!/bin/sh
+# ============================================================================
+# limen-radio — say honestly what this device's radios can and cannot do.
+# ============================================================================
+# Reports measured capability, never a guess. If it can't prove monitor mode
+# works, it says so rather than implying it does.
+set -u
+echo "=== LimenOS radio capability ==="
+echo
+
+echo "-- kernel --"
+echo "release : $(uname -r)"
+if [ -r /proc/config.gz ]; then CFG="zcat /proc/config.gz"
+elif [ -r "/boot/config-$(uname -r)" ]; then CFG="cat /boot/config-$(uname -r)"
+else CFG=""; fi
+
+echo
+echo "-- wireless interfaces --"
+if command -v iw >/dev/null 2>&1; then
+    iw dev 2>/dev/null | sed 's/^/  /'
+    echo
+    for p in /sys/class/ieee80211/*; do
+        [ -d "$p" ] || continue
+        phy=$(basename "$p")
+        echo "  $phy supported interface modes:"
+        iw phy "$phy" info 2>/dev/null | sed -n '/Supported interface modes/,/^\t[A-Za-z]/p' | sed 's/^/    /'
+        if iw phy "$phy" info 2>/dev/null | grep -q "\* monitor"; then
+            echo "    => MONITOR MODE: advertised by the driver"
+        else
+            echo "    => MONITOR MODE: NOT advertised — capture will not work on $phy"
+        fi
+    done
+else
+    echo "  iw not installed"
+fi
+
+echo
+echo "-- USB radios present --"
+lsusb 2>/dev/null | grep -iE "realtek|atheros|ralink|mediatek|wireless|802\.11|wlan" | sed 's/^/  /' \
+    || echo "  (none matched — run plain lsusb to see everything)"
+
+echo
+echo "-- honest verdict --"
+INT=""
+for p in /sys/class/ieee80211/*; do [ -d "$p" ] && INT="$INT $(basename "$p")"; done
+if [ -z "$INT" ]; then
+    echo "  No 802.11 PHY registered at all."
+    echo "  On the STOCK kernel this is expected for any EXTERNAL adapter:"
+    echo "  CONFIG_RTL8733BU is the only WLAN driver compiled in, so nothing"
+    echo "  else can bind. That is what the M2 deck kernel fixes."
+else
+    echo "  PHYs:$INT"
+    echo "  Note: a driver advertising 'monitor' is necessary but NOT sufficient."
+    echo "  Prove injection before relying on it:   aireplay-ng --test <iface>"
+fi
+echo
+echo "  The internal RTL8733BU is the MANAGEMENT link. Keep your SSH on it and"
+echo "  do capture work on an external adapter on the UPPER USB-C port."
+echo "  (The lower port cannot supply VBUS — see docs/04-constraints.md.)"

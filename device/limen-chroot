@@ -1,0 +1,82 @@
+#!/bin/sh
+# ============================================================================
+# limen-chroot — enter LimenOS from the running stock Miyoo firmware.
+# ============================================================================
+# THIS IS THE M1 ENTRY POINT. Run it on the device, on stock firmware.
+#
+#   limen-chroot            enter an interactive LimenOS shell
+#   limen-chroot <cmd...>   run one command inside LimenOS
+#   limen-chroot --umount   tear the mounts down
+#
+# At M1 the Flip still boots the vendor kernel from NAND. LimenOS is a
+# complete Debian arm64 rootfs on the SD card that we chroot into, borrowing
+# that kernel. Nothing is written to NAND, ever.
+#
+# Why a chroot is enough: the stock kernel has USER_NS, PID_NS, NET_NS,
+# SECCOMP and OVERLAY_FS all =y, and its glibc (2.36) is irrelevant because
+# LimenOS brings its own complete userland.
+# ============================================================================
+set -u
+
+ROOT_LABEL="${LIMEN_ROOT_LABEL:-LIMEN_ROOT}"
+DATA_LABEL="${LIMEN_DATA_LABEL:-LIMEN_DATA}"
+MNT="${LIMEN_MNT:-/mnt/limen}"
+DATA_MNT="$MNT/data"
+
+say() { echo "[limen] $*"; }
+die() { echo "[limen] FATAL: $*" >&2; exit 1; }
+
+find_part() { # find_part LABEL
+    if command -v blkid >/dev/null 2>&1; then
+        blkid 2>/dev/null | sed -n "s|^\([^:]*\):.*LABEL=\"$1\".*|\1|p" | head -1
+    fi
+}
+
+do_umount() {
+    for m in dev/pts dev proc sys run "$(basename "$DATA_MNT")"; do
+        mountpoint -q "$MNT/$m" 2>/dev/null && umount "$MNT/$m" 2>/dev/null
+    done
+    mountpoint -q "$MNT" 2>/dev/null && umount "$MNT" 2>/dev/null
+    say "unmounted"
+}
+
+[ "${1:-}" = "--umount" ] && { do_umount; exit 0; }
+
+# --- locate and mount the rootfs -------------------------------------------
+if ! mountpoint -q "$MNT" 2>/dev/null; then
+    DEV="$(find_part "$ROOT_LABEL")"
+    [ -n "$DEV" ] || die "no partition labelled $ROOT_LABEL found.
+    Is the LimenOS card inserted? Check: blkid"
+    mkdir -p "$MNT"
+    say "mounting $DEV -> $MNT"
+    mount -t ext4 "$DEV" "$MNT" || die "mount failed"
+fi
+
+[ -x "$MNT/bin/bash" ] || [ -x "$MNT/usr/bin/bash" ] || \
+    die "$MNT does not look like a LimenOS rootfs (no bash)"
+
+# --- bind the kernel interfaces --------------------------------------------
+for m in proc sys dev dev/pts run; do mkdir -p "$MNT/$m"; done
+mountpoint -q "$MNT/proc"    || mount -t proc  proc    "$MNT/proc"
+mountpoint -q "$MNT/sys"     || mount -t sysfs sysfs   "$MNT/sys"
+mountpoint -q "$MNT/dev"     || mount --bind /dev      "$MNT/dev"
+mountpoint -q "$MNT/dev/pts" || mount -t devpts devpts "$MNT/dev/pts" 2>/dev/null
+mountpoint -q "$MNT/run"     || mount -t tmpfs tmpfs   "$MNT/run"
+
+# --- the capture vault ------------------------------------------------------
+DDEV="$(find_part "$DATA_LABEL")"
+if [ -n "$DDEV" ]; then
+    mkdir -p "$DATA_MNT"
+    mountpoint -q "$DATA_MNT" || mount "$DDEV" "$DATA_MNT" 2>/dev/null && \
+        say "capture vault: $DDEV -> $MNT/data"
+fi
+
+# --- DNS --------------------------------------------------------------------
+[ -r /etc/resolv.conf ] && cp /etc/resolv.conf "$MNT/etc/resolv.conf" 2>/dev/null
+
+say "entering LimenOS (exit, then 'limen-chroot --umount' to clean up)"
+if [ $# -gt 0 ]; then
+    chroot "$MNT" /bin/bash -lc "$*"
+else
+    chroot "$MNT" /bin/bash -l
+fi

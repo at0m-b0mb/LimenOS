@@ -1,0 +1,246 @@
+#!/bin/sh
+# ============================================================================
+# limen-hid — USB HID keyboard gadget for the Miyoo Flip (LimenOS)
+# ============================================================================
+# Works on STOCK Miyoo firmware. No kernel rebuild, no patching.
+#
+# Why it works: the stock 5.10.160 kernel ships
+#     CONFIG_USB_CONFIGFS=y  CONFIG_USB_F_HID=y  CONFIG_USB_CONFIGFS_F_HID=y
+# and Rockchip's /usr/bin/usbdevice already defines a hid function whose
+# hid_prepare() writes a correct 8-byte boot-protocol keyboard report
+# descriptor. We just ask it to turn that function on.
+#
+#   limen-hid enable            bring the HID gadget up  -> /dev/hidg0
+#   limen-hid status            show gadget state
+#   limen-hid disable           tear it down, restore previous gadget
+#   limen-hid type "text"       type a literal string
+#   limen-hid key GUI r         press a key combination
+#   limen-hid run f.ducky --arm execute a Ducky script (see SAFETY)
+#
+# SAFETY — deliberate friction, per SCOPE.md:
+#   * `run` refuses without --arm. Keystroke injection is an active attack;
+#     it should never be one typo away.
+#   * This tool installs NO autostart, NO init hook, NO udev rule. It fires
+#     when a human runs it, and never otherwise.
+#   * Plug the LOWER USB-C into the target. The upper port is host-only.
+#
+# TESTING: set LIMEN_HID_DEV to a regular file to capture reports instead of
+# sending them, e.g.  LIMEN_HID_DEV=/tmp/out.bin limen-hid type "hi"
+# ============================================================================
+set -u
+
+HID_DEV="${LIMEN_HID_DEV:-/dev/hidg0}"
+GADGET=/sys/kernel/config/usb_gadget/rockchip
+USBCFG=/tmp/.usb_config
+DEFAULT_DELAY="${LIMEN_HID_DELAY:-0}"
+
+say()  { echo "[limen-hid] $*"; }
+die()  { echo "[limen-hid] FATAL: $*" >&2; exit 1; }
+
+# --- report emission --------------------------------------------------------
+# Boot keyboard report: <modifier> <reserved> <key1..key6>
+# Octal escapes (\ooo) are POSIX printf; \xHH is not portable to all shells.
+emit() { # emit <modifier_dec> <keycode_dec>
+    printf "\\$(printf '%03o' "$1")\\000\\$(printf '%03o' "$2")\\000\\000\\000\\000\\000" \
+        >> "$HID_DEV"
+}
+release() { emit 0 0; }
+
+tap() { # tap <modifier_dec> <keycode_dec>
+    emit "$1" "$2"
+    release
+    [ "$DEFAULT_DELAY" -gt 0 ] 2>/dev/null && usleep $(( DEFAULT_DELAY * 1000 )) 2>/dev/null
+    return 0
+}
+
+# --- character -> "modifier keycode" ---------------------------------------
+# HID Usage Table, Keyboard/Keypad page (0x07). SHIFT = modifier 2.
+charmap() {
+    case "$1" in
+        a) echo "0 4";;   b) echo "0 5";;   c) echo "0 6";;   d) echo "0 7";;
+        e) echo "0 8";;   f) echo "0 9";;   g) echo "0 10";;  h) echo "0 11";;
+        i) echo "0 12";;  j) echo "0 13";;  k) echo "0 14";;  l) echo "0 15";;
+        m) echo "0 16";;  n) echo "0 17";;  o) echo "0 18";;  p) echo "0 19";;
+        q) echo "0 20";;  r) echo "0 21";;  s) echo "0 22";;  t) echo "0 23";;
+        u) echo "0 24";;  v) echo "0 25";;  w) echo "0 26";;  x) echo "0 27";;
+        y) echo "0 28";;  z) echo "0 29";;
+        A) echo "2 4";;   B) echo "2 5";;   C) echo "2 6";;   D) echo "2 7";;
+        E) echo "2 8";;   F) echo "2 9";;   G) echo "2 10";;  H) echo "2 11";;
+        I) echo "2 12";;  J) echo "2 13";;  K) echo "2 14";;  L) echo "2 15";;
+        M) echo "2 16";;  N) echo "2 17";;  O) echo "2 18";;  P) echo "2 19";;
+        Q) echo "2 20";;  R) echo "2 21";;  S) echo "2 22";;  T) echo "2 23";;
+        U) echo "2 24";;  V) echo "2 25";;  W) echo "2 26";;  X) echo "2 27";;
+        Y) echo "2 28";;  Z) echo "2 29";;
+        1) echo "0 30";;  2) echo "0 31";;  3) echo "0 32";;  4) echo "0 33";;
+        5) echo "0 34";;  6) echo "0 35";;  7) echo "0 36";;  8) echo "0 37";;
+        9) echo "0 38";;  0) echo "0 39";;
+        '!') echo "2 30";; '@') echo "2 31";; '#') echo "2 32";; '$') echo "2 33";;
+        '%') echo "2 34";; '^') echo "2 35";; '&') echo "2 36";; '*') echo "2 37";;
+        '(') echo "2 38";; ')') echo "2 39";;
+        ' ')  echo "0 44";;
+        '-')  echo "0 45";;  '_')  echo "2 45";;
+        '=')  echo "0 46";;  '+')  echo "2 46";;
+        '[')  echo "0 47";;  '{')  echo "2 47";;
+        ']')  echo "0 48";;  '}')  echo "2 48";;
+        '\') echo "0 49";;  '|')  echo "2 49";;
+        ';')  echo "0 51";;  ':')  echo "2 51";;
+        "'")  echo "0 52";;  '"')  echo "2 52";;
+        '`')  echo "0 53";;  '~')  echo "2 53";;
+        ',')  echo "0 54";;  '<')  echo "2 54";;
+        '.')  echo "0 55";;  '>')  echo "2 55";;
+        '/')  echo "0 56";;  '?')  echo "2 56";;
+        *) return 1;;
+    esac
+}
+
+# --- named keys -------------------------------------------------------------
+keyname() {
+    case "$(upper "$1")" in
+        ENTER|RETURN) echo 40;; ESC|ESCAPE) echo 41;;
+        BACKSPACE)    echo 42;; TAB)        echo 43;;
+        SPACE)        echo 44;; CAPSLOCK)   echo 57;;
+        F1) echo 58;; F2) echo 59;; F3) echo 60;; F4) echo 61;;
+        F5) echo 62;; F6) echo 63;; F7) echo 64;; F8) echo 65;;
+        F9) echo 66;; F10) echo 67;; F11) echo 68;; F12) echo 69;;
+        PRINTSCREEN) echo 70;; SCROLLLOCK) echo 71;; PAUSE|BREAK) echo 72;;
+        INSERT) echo 73;; HOME) echo 74;; PAGEUP) echo 75;;
+        DELETE|DEL) echo 76;; END) echo 77;; PAGEDOWN) echo 78;;
+        RIGHT|RIGHTARROW) echo 79;; LEFT|LEFTARROW) echo 80;;
+        DOWN|DOWNARROW)  echo 81;; UP|UPARROW)     echo 82;;
+        MENU|APP) echo 101;;
+        *) return 1;;
+    esac
+}
+modname() {
+    case "$(upper "$1")" in
+        CTRL|CONTROL) echo 1;;  SHIFT) echo 2;;
+        ALT)          echo 4;;  GUI|WINDOWS|WIN|COMMAND|META) echo 8;;
+        *) return 1;;
+    esac
+}
+upper() { echo "$1" | tr 'a-z' 'A-Z'; }
+
+# --- public verbs -----------------------------------------------------------
+do_type() {
+    [ -w "$HID_DEV" ] || [ ! -e "$HID_DEV" ] || true
+    s="$1"
+    i=1
+    len=$(printf '%s' "$s" | wc -c)
+    while [ "$i" -le "$len" ]; do
+        c=$(printf '%s' "$s" | cut -c"$i")
+        # cut -c loses literal spaces at some positions; recover via dd
+        [ -z "$c" ] && c=' '
+        if map=$(charmap "$c"); then
+            # shellcheck disable=SC2086
+            tap $map
+        else
+            say "WARNING: no keycode for character '$c' (skipped)"
+        fi
+        i=$(( i + 1 ))
+    done
+}
+
+do_key() { # do_key GUI r   /  do_key CTRL ALT DELETE
+    mod=0; code=0
+    for tok in "$@"; do
+        if m=$(modname "$tok"); then
+            mod=$(( mod | m ))
+        elif k=$(keyname "$tok"); then
+            code="$k"
+        elif map=$(charmap "$tok"); then
+            cm=${map%% *}; ck=${map##* }
+            mod=$(( mod | cm )); code="$ck"
+        else
+            die "unknown key token: $tok"
+        fi
+    done
+    tap "$mod" "$code"
+}
+
+do_enable() {
+    [ -d /sys/kernel/config ] || mount -t configfs none /sys/kernel/config 2>/dev/null
+    if [ -e "$USBCFG" ] && ! grep -q usb_hid_en "$USBCFG" 2>/dev/null; then
+        cp "$USBCFG" "$USBCFG.limen-backup" 2>/dev/null
+        say "saved previous gadget config to $USBCFG.limen-backup"
+    fi
+    echo "usb_hid_en" > "$USBCFG"
+    say "requested HID gadget via $USBCFG"
+    if command -v usbdevice >/dev/null 2>&1; then
+        usbdevice restart || usbdevice start || true
+    else
+        die "usbdevice not found — are you on stock firmware?"
+    fi
+    n=0
+    while [ "$n" -lt 20 ]; do
+        [ -e /dev/hidg0 ] && { say "ready: /dev/hidg0"; return 0; }
+        n=$(( n + 1 )); sleep 1
+    done
+    die "/dev/hidg0 did not appear — check /tmp/usbdevice.log"
+}
+
+do_disable() {
+    if [ -f "$USBCFG.limen-backup" ]; then
+        mv "$USBCFG.limen-backup" "$USBCFG"
+        say "restored previous gadget config"
+    else
+        echo "usb_adb_en" > "$USBCFG"
+        say "reverted to stock default gadget (adb)"
+    fi
+    command -v usbdevice >/dev/null 2>&1 && usbdevice restart
+    say "HID gadget down"
+}
+
+do_status() {
+    echo "hid device    : $HID_DEV $([ -e "$HID_DEV" ] && echo '(present)' || echo '(ABSENT)')"
+    echo "UDC           : $(ls /sys/class/udc/ 2>/dev/null | tr '\n' ' ')"
+    echo "usb state     : $(cat /sys/class/android_usb/android0/state 2>/dev/null)"
+    echo "gadget funcs  : $(ls "$GADGET/functions" 2>/dev/null | tr '\n' ' ')"
+    echo "usb_config    : $(cat "$USBCFG" 2>/dev/null)"
+}
+
+# --- Ducky script -----------------------------------------------------------
+do_run() {
+    f="$1"
+    [ -r "$f" ] || die "cannot read $f"
+    say "executing $f"
+    while IFS= read -r line || [ -n "$line" ]; do
+        # strip CR from CRLF files
+        line=$(printf '%s' "$line" | tr -d '\r')
+        case "$line" in
+            ''|REM*|'#'*) continue ;;
+        esac
+        verb=${line%% *}
+        rest=${line#* }
+        [ "$rest" = "$line" ] && rest=""
+        case "$(upper "$verb")" in
+            STRING)        do_type "$rest" ;;
+            STRINGLN)      do_type "$rest"; do_key ENTER ;;
+            DELAY)         usleep $(( ${rest:-0} * 1000 )) 2>/dev/null || sleep 1 ;;
+            DEFAULTDELAY|DEFAULT_DELAY) DEFAULT_DELAY="${rest:-0}" ;;
+            REPEAT)        say "REPEAT not supported; unroll the script" ;;
+            *)             # shellcheck disable=SC2086
+                           do_key $verb $rest ;;
+        esac
+    done < "$f"
+    say "done"
+}
+
+# --- dispatch ---------------------------------------------------------------
+case "${1:-}" in
+    enable)  do_enable ;;
+    disable) do_disable ;;
+    status)  do_status ;;
+    type)    shift; [ $# -ge 1 ] || die "usage: limen-hid type \"text\""; do_type "$*" ;;
+    key)     shift; [ $# -ge 1 ] || die "usage: limen-hid key GUI r"; do_key "$@" ;;
+    run)     shift
+             f="${1:-}"; [ -n "$f" ] || die "usage: limen-hid run <file> --arm"
+             shift 2>/dev/null || true
+             case "${1:-}" in
+                 --arm) ;;
+                 *) die "refusing to run '$f' without --arm.
+    Keystroke injection is an active attack against whatever is plugged in.
+    Confirm the target is yours or in scope, then re-run with --arm." ;;
+             esac
+             do_run "$f" ;;
+    *) sed -n '2,32p' "$0" | sed 's/^# \{0,1\}//' ;;
+esac

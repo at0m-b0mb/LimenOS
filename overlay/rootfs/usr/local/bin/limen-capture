@@ -1,0 +1,45 @@
+#!/bin/sh
+# ============================================================================
+# limen-capture — tcpdump wrapper that cannot silently lose your capture.
+# ============================================================================
+#   limen-capture <iface> [extra tcpdump args...]
+#
+# Two failure modes this exists to prevent:
+#  1. The vault is FAT32 at M1 (the stock kernel has no exFAT), so ANY single
+#     file over 4 GB fails mid-capture. We always rotate well under that.
+#  2. A full card silently truncates the evidence. We check free space first
+#     and cap total ring size.
+set -u
+IFACE="${1:-}"
+[ -n "$IFACE" ] || { echo "usage: limen-capture <iface> [tcpdump args]"; exit 1; }
+shift
+
+VAULT="${LIMEN_VAULT:-/data/captures}"
+mkdir -p "$VAULT" || { echo "cannot write $VAULT"; exit 1; }
+
+# FAT32 hard limit is 4 GiB; stay well clear.
+CHUNK_MB="${LIMEN_CHUNK_MB:-512}"
+RING="${LIMEN_RING:-16}"
+
+AVAIL_MB=$(df -Pm "$VAULT" | awk 'NR==2{print $4}')
+NEED_MB=$(( CHUNK_MB * RING ))
+echo "[limen] vault     : $VAULT"
+echo "[limen] free      : ${AVAIL_MB} MB"
+echo "[limen] ring      : ${RING} x ${CHUNK_MB} MB = ${NEED_MB} MB max"
+if [ "${AVAIL_MB:-0}" -lt "$NEED_MB" ]; then
+    RING=$(( AVAIL_MB / CHUNK_MB ))
+    [ "$RING" -lt 2 ] && { echo "[limen] ABORT: under ${CHUNK_MB}MB x2 free in the vault"; exit 1; }
+    echo "[limen] reduced ring to $RING files to fit free space"
+fi
+
+FS=$(df -PT "$VAULT" 2>/dev/null | awk 'NR==2{print $2}')
+case "$FS" in
+  vfat|msdos) echo "[limen] filesystem: $FS — 4GB/file cap, rotation is mandatory (it is on)";;
+  *)          echo "[limen] filesystem: ${FS:-unknown}";;
+esac
+
+BASE="$VAULT/$(date +%Y%m%d-%H%M%S)-$IFACE.pcap"
+echo "[limen] writing   : $BASE (rotating)"
+echo "[limen] stop with Ctrl-C; files are complete as they rotate."
+echo
+exec tcpdump -i "$IFACE" -n -s 0 -C "$CHUNK_MB" -W "$RING" -w "$BASE" "$@"

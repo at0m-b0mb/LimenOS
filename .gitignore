@@ -1,0 +1,11 @@
+# Build output — 8GB+ card images and rootfs tarballs. Never commit these.
+out/
+*.img
+*.tar.zst
+*.sparseimage
+
+# Extracted vendor firmware (redistributable? assume not) — keep local only.
+# research/stock-firmware/ holds only the small derived artifacts we DO keep:
+# the kernel .config, the DTB and two init scripts.
+stock/
+rfs/

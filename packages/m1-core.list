@@ -1,0 +1,164 @@
+# ============================================================================
+# LimenOS M1 core package set  —  Debian trixie arm64
+# ============================================================================
+# Lines beginning "PKG " are installed. Everything else is commentary.
+#
+# M1 runs on the STOCK Miyoo kernel. Only tools that actually function there
+# are listed; anything needing monitor mode, TUN, nftables, bridging or
+# USB-Ethernet is deferred to M2 (see the bottom of this file).
+#
+# Rationale for every exclusion is in docs/04-constraints.md.
+# ============================================================================
+
+# ---- base / shell ----------------------------------------------------------
+PKG systemd
+PKG systemd-sysv
+PKG udev
+PKG dbus
+PKG locales
+PKG tzdata
+PKG sudo
+PKG bash
+PKG zsh
+PKG tmux
+PKG vim
+PKG less
+PKG git
+PKG curl
+PKG wget
+PKG ca-certificates
+PKG openssh-server
+PKG openssh-client
+PKG rsync
+PKG jq
+PKG ripgrep
+PKG fzf
+PKG htop
+PKG ncdu
+PKG pv
+PKG file
+PKG unzip
+PKG xz-utils
+PKG zstd
+PKG psmisc
+PKG procps
+PKG iproute2
+PKG net-tools
+PKG ifupdown
+PKG isc-dhcp-client
+PKG wpasupplicant
+PKG wireless-tools
+PKG iw
+PKG rfkill
+PKG usbutils
+PKG pciutils
+PKG kmod
+
+# ---- memory pressure: mandatory at ~1GB ------------------------------------
+PKG zram-tools
+
+# ---- python ----------------------------------------------------------------
+PKG python3
+PKG python3-pip
+PKG python3-venv
+PKG python3-scapy
+PKG python3-requests
+PKG python3-cryptography
+
+# ---- capture & analysis  (works on stock: CONFIG_PACKET=y) ------------------
+PKG tcpdump
+PKG tshark
+PKG ngrep
+PKG dsniff
+PKG iftop
+PKG mtr-tiny
+PKG traceroute
+PKG dnsutils
+PKG whois
+PKG socat
+PKG netcat-openbsd
+PKG tcpflow
+
+# ---- scanning --------------------------------------------------------------
+PKG nmap
+PKG masscan
+PKG arp-scan
+PKG netdiscover
+PKG fping
+PKG hping3
+
+# ---- web / application -----------------------------------------------------
+PKG sqlmap
+PKG nikto
+PKG whatweb
+PKG wafw00f
+PKG dirb
+PKG gobuster
+PKG ffuf
+PKG pipx
+# mitmproxy: REMOVED from Debian trixie (verified empirically by the 10-build
+# script, which logged it to out/unavailable.txt). Install it per-user instead:
+#     pipx install mitmproxy
+# Note it is heavy on a 1GB device — run limen-zram on first.
+
+# ---- hardware / RF / serial  (the Flip's real strength on stock) -----------
+PKG minicom
+PKG picocom
+PKG screen
+PKG flashrom
+PKG avrdude
+PKG openocd
+PKG sigrok-cli
+PKG binwalk
+PKG squashfs-tools
+PKG mtd-utils
+PKG i2c-tools
+PKG can-utils
+PKG spi-tools
+PKG device-tree-compiler
+
+# ---- bluetooth (internal radio works at M1) --------------------------------
+PKG bluez
+PKG bluez-tools
+
+# ---- local AP / DNS (hostapd works; no bridging until M2) ------------------
+PKG hostapd
+PKG dnsmasq-base
+
+# ---- forensics / offline analysis ------------------------------------------
+PKG hashid
+PKG john
+PKG libimage-exiftool-perl
+PKG foremost
+PKG testdisk
+PKG sleuthkit
+PKG yara
+PKG cewl
+PKG steghide
+
+# ---- filesystems for the capture vault -------------------------------------
+PKG dosfstools
+PKG exfatprogs
+PKG exfat-fuse
+PKG ntfs-3g
+PKG e2fsprogs
+PKG parted
+
+# ============================================================================
+# DEFERRED TO M2 — these need the deck kernel, and would only mislead at M1.
+# ============================================================================
+#   aircrack-ng     monitor mode + injection -> no USB wifi driver on stock
+#   kismet          same
+#   hcxdumptool     same
+#   wifite          same
+#   mdk4 / reaver   same
+#   bettercap       needs TUN/bridge for most of what makes it useful
+#   wireguard-tools no CONFIG_WIREGUARD, no TUN
+#   openvpn         no TUN
+#   nftables        no CONFIG_NF_TABLES
+#   bridge-utils    no CONFIG_BRIDGE
+#
+# NEVER — see docs/04-constraints.md:
+#   hashcat                 no OpenCL path on Mali-G52; CPU-only is theatre
+#   metasploit-framework    ~2GB + Ruby on a 1GB device; pivot from a laptop
+# ============================================================================
