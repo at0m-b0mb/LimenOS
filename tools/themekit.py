@@ -203,7 +203,97 @@ ICONS = {
 ICON_W, ICON_H = 132, 143
 
 
-def icon(text, path, selected=False):
+# Systems grouped by what you physically put in the machine. Without text an
+# icon has to say something, and a single shared mark told you nothing: 68
+# identical cartridges is no better than 68 blanks.
+FAMILY = {
+    "disc":   {"ps","psp","ppsspp","dc","segacd","neocd","pcecd","satella","scummvm","dos"},
+    "hand":   {"gb","gbc","gba","gg","lynx","ngp","ngpc","ws","wsc","supervision",
+               "megaduck","pico","arduboy","vb","gw","tic"},
+    "arcade": {"arcade","mame","cps1","cps2","cps3","neogeo","openbor","shoot","sgfx"},
+    "micro":  {"msx","c64","cpc","amiga","atarist","zxs","easyrpg","poke","ports"},
+}
+def _family(key):
+    for fam, keys in FAMILY.items():
+        if key in keys:
+            return fam
+    return "cart"
+
+
+def _mark(d, fam, cx, cy, w, h, fg, lw):
+    """Draw a family mark inside a strict box.
+
+    The first version took half-extents straight off the icon size (bh =
+    h*0.68) and every shape overflowed the tile -- handhelds, arcades and
+    micros were all visibly clipped. Everything is now derived from HX/HY,
+    the real half-extents available between the tile padding and the accent
+    rule, so nothing can run outside.
+    """
+    HX = w * 0.255          # half-width  available
+    HY = h * 0.225          # half-height available
+
+    if fam == "disc":
+        r = min(HX, HY)
+        d.ellipse([cx - r, cy - r, cx + r, cy + r], outline=fg, width=lw)
+        d.ellipse([cx - r * .24, cy - r * .24, cx + r * .24, cy + r * .24], fill=fg)
+        d.arc([cx - r * .66, cy - r * .66, cx + r * .66, cy + r * .66],
+              205, 315, fill=fg, width=max(1, int(lw * .7)))
+
+    elif fam == "hand":
+        bw, bh = HX * 0.74, HY
+        d.rounded_rectangle([cx - bw, cy - bh, cx + bw, cy + bh],
+                            radius=int(bw * 0.36), outline=fg, width=lw)
+        d.rounded_rectangle([cx - bw * .54, cy - bh * .66, cx + bw * .54, cy - bh * .04],
+                            radius=int(bw * 0.14), fill=fg)
+        d.rectangle([cx - bw * .46, cy + bh * .26, cx - bw * .12, cy + bh * .38], fill=fg)
+        d.ellipse([cx + bw * .14, cy + bh * .22, cx + bw * .44, cy + bh * .52], fill=fg)
+
+    elif fam == "arcade":
+        bw, bh = HX * 0.88, HY
+        d.polygon([(cx - bw, cy + bh), (cx - bw, cy - bh * .46),
+                   (cx - bw * .58, cy - bh), (cx + bw * .58, cy - bh),
+                   (cx + bw, cy - bh * .46), (cx + bw, cy + bh)],
+                  outline=fg, width=lw)
+        d.rounded_rectangle([cx - bw * .54, cy - bh * .50, cx + bw * .54, cy + bh * .06],
+                            radius=int(bw * 0.12), fill=fg)
+        d.rectangle([cx - bw * .30, cy + bh * .40, cx + bw * .30, cy + bh * .54], fill=fg)
+
+    elif fam == "micro":
+        # a keyboard with a screen behind it, both inside the box
+        kw, kh = HX, HY * 0.42
+        ky = cy + HY * 0.30
+        d.rounded_rectangle([cx - kw, ky - kh, cx + kw, ky + kh],
+                            radius=int(kw * 0.10), outline=fg, width=lw)
+        for row in (0, 1):
+            for i in range(5):
+                x = cx - kw * .70 + i * kw * .35
+                y = ky - kh * .40 + row * kh * .60
+                d.rectangle([x, y, x + kw * .18, y + kh * .30], fill=fg)
+        sw, sh = HX * 0.52, HY * 0.42
+        sy = cy - HY * 0.52
+        d.rounded_rectangle([cx - sw, sy - sh, cx + sw, sy + sh],
+                            radius=int(sw * 0.14), fill=fg)
+
+    else:  # cart
+        bw, bh = HX * 0.92, HY * 0.84
+        d.rounded_rectangle([cx - bw, cy - bh, cx + bw, cy + bh],
+                            radius=int(bw * 0.17), outline=fg, width=lw)
+        d.rounded_rectangle([cx - bw * .56, cy - bh * .54, cx + bw * .56, cy + bh * .02],
+                            radius=int(bw * 0.08), fill=fg)
+        for i in (-2, -1, 0, 1, 2):
+            x = cx + i * bw * .29
+            d.rectangle([x - bw * .075, cy + bh * .30, x + bw * .075, cy + bh * .82], fill=fg)
+
+
+def icon(key, path, selected=False):
+    """One system icon. NO TEXT.
+
+    These used to carry the system name typographically. It looked good in
+    isolation and wrong on the device: MainUI draws its own label underneath
+    in its own face, so every entry appeared twice in two different fonts and
+    read as a rendering fault. hideIconTitle and hideLabels.icons did not
+    suppress it. Icons are pictures; the launcher owns the words.
+    """
     img = canvas(ICON_W, ICON_H, CLEAR)
     d = ImageDraw.Draw(img)
     pad = int(5 * SS)
@@ -212,20 +302,17 @@ def icon(text, path, selected=False):
         rounded(d, box, int(14 * SS), fill=BRASS)
         fg, rule = PAPER, PAPER
     else:
-        rounded(d, box, int(14 * SS), fill=SURFACE, outline=RULE, width=max(1, int(1.4 * SS)))
+        rounded(d, box, int(14 * SS), fill=SURFACE, outline=RULE,
+                width=max(1, int(1.4 * SS)))
         fg, rule = INK, BRASS
 
-    # size the type to the label so 4-character names still fit
-    n = len(text)
-    size = int((46 if n <= 2 else 38 if n == 3 else 30 if n == 4 else 24) * SS)
-    f = font(SERIF, size)
     cx = ICON_W * SS // 2
-    cy = int(ICON_H * SS * 0.46)
-    d.text((cx, cy), text, font=f, fill=fg, anchor="mm")
+    cy = int(ICON_H * SS * 0.45)
+    _mark(d, _family(key), cx, cy, ICON_W * SS, ICON_H * SS, fg,
+          max(2, int(ICON_W * SS * 0.030)))
 
-    # a short rule under the type: the one accent, and it marks selection too
     rw = int(ICON_W * SS * 0.26)
-    ry = int(ICON_H * SS * 0.70)
+    ry = int(ICON_H * SS * 0.78)
     d.rectangle([cx - rw, ry, cx + rw, ry + max(2, int(3 * SS))], fill=rule)
     done(img, ICON_W, ICON_H, path)
 
@@ -302,9 +389,9 @@ def build(out):
     pill(44, 24, S("num-bg.png"))
     pill(90, 14, S("list-num.png"))
 
-    for key, label in ICONS.items():
-        icon(label, os.path.join(icons, key + ".png"))
-        icon(label, os.path.join(sel, key + ".png"), selected=True)
+    for key in ICONS:
+        icon(key, os.path.join(icons, key + ".png"))
+        icon(key, os.path.join(sel, key + ".png"), selected=True)
 
     # Ship a single-face TTF alongside the config. See 30-install-theme.sh
     # for why a .ttc is actively harmful here.

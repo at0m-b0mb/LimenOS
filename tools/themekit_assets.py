@@ -131,10 +131,10 @@ def nav_tile(path, kind, label, w, h, selected):
         d.rounded_rectangle([pad, pad, W - pad, H - pad], radius=int(W * 0.10),
                             fill=SURFACE, outline=RULE, width=max(1, int(W * 0.010)))
         fg, lab = MUTED, MUTED
-    r = W * 0.215
-    _nav_glyph(d, kind, W / 2, H * 0.40, r, fg, max(2, int(W * 0.026)))
-    f = _f(SERIF, int(W * 0.145))
-    d.text((W / 2, H * 0.735), label, font=f, fill=lab, anchor="mm")
+    # No baked label here either: MainUI draws the name itself, and two
+    # labels in two faces is what made the UI look broken on the device.
+    r = W * 0.235
+    _nav_glyph(d, kind, W / 2, H * 0.44, r, fg, max(2, int(W * 0.026)))
     _save(img, w, h, path)
 
 
