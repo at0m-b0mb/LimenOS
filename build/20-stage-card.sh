@@ -28,10 +28,21 @@ fi
 }
 echo "[limen] staging onto: $DEST"
 
-# the vendor hook
+# the vendor hook — copy the WHOLE tree, not just MainUI. The first version
+# named MainUI explicitly and silently left the keymon/btmanager/
+# hardwareservice/miyoo_inputd shims behind, which is the 16-second boot
+# stall they exist to remove.
 mkdir -p "$DEST/miyoo355/app"
-cp "$HERE/device/bootstrap/miyoo355/app/MainUI" "$DEST/miyoo355/app/MainUI"
-chmod +x "$DEST/miyoo355/app/MainUI" 2>/dev/null || true
+cp -R "$HERE/device/bootstrap/miyoo355/." "$DEST/miyoo355/"
+chmod -R +x "$DEST/miyoo355/app/" 2>/dev/null || true
+
+# every file the hook tree declares must have landed
+missing=0
+for f in "$HERE"/device/bootstrap/miyoo355/app/*; do
+    b="$(basename "$f")"
+    [ -f "$DEST/miyoo355/app/$b" ] || { echo "  MISSING on card: $b"; missing=1; }
+done
+[ "$missing" -eq 0 ] || { echo "staging incomplete"; exit 1; }
 
 # the device tools
 mkdir -p "$DEST/limen"
