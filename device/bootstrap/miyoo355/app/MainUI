@@ -1,0 +1,66 @@
+#!/bin/sh
+# ============================================================================
+# LimenOS bootstrap hook — runs as root at boot on the stock Miyoo firmware.
+# ============================================================================
+# WHY THIS FILE IS CALLED MainUI
+#   /usr/miyoo/bin/runmiyoo.sh does, verbatim:
+#       if [ -d ${CUSTOMER_DIR} ] ; then ... ${CUSTOMER_DIR}/app/MainUI
+#   where CUSTOMER_DIR is /media/sdcard0/miyoo355/ or /media/sdcard1/miyoo355/.
+#   So the stock firmware deliberately prefers an SD-card MainUI over its own.
+#   This is the vendor's own extension point and the same one every Miyoo CFW
+#   uses. Nothing is patched and nothing is written to internal flash.
+#
+# WHAT IT DOES
+#   1. installs an SSH public key so you can get a shell on your own device
+#   2. makes sure dropbear is running
+#   3. exits NON-ZERO on purpose, so runmiyoo.sh falls through to the real
+#      /usr/miyoo/bin/MainUI and you still get your normal console UI
+#
+# It writes only to tmpfs and to the SD card. It never touches /dev/mtd*.
+# ============================================================================
+LOG=/tmp/limen-bootstrap.log
+exec >>"$LOG" 2>&1
+echo "=== limen bootstrap $(date 2>/dev/null) ==="
+
+CARD="$(dirname "$(dirname "$0")")"     # .../miyoo355
+CARD="$(dirname "$CARD")"                # the card mountpoint
+echo "card mounted at: $CARD"
+
+# --- 1. SSH key ------------------------------------------------------------
+# /root lives in the read-only squashfs, so bind-mount a writable dir over it.
+if [ ! -f /root/.ssh/authorized_keys ]; then
+    mkdir -p /tmp/limen-root/.ssh
+    cp -a /root/. /tmp/limen-root/ 2>/dev/null
+    mkdir -p /tmp/limen-root/.ssh
+    cat > /tmp/limen-root/.ssh/authorized_keys <<'KEYEOF'
+ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFPHRXdNECX9sTsJxT/weLuPeFkzYL5pefB39K0UTTqk limenos-flip
+KEYEOF
+    chmod 700 /tmp/limen-root/.ssh
+    chmod 600 /tmp/limen-root/.ssh/authorized_keys
+    mount --bind /tmp/limen-root /root && echo "authorized_keys installed via bind-mount"
+fi
+
+# --- 2. dropbear -----------------------------------------------------------
+if ! pgrep dropbear >/dev/null 2>&1; then
+    echo "starting dropbear"
+    /etc/init.d/S50dropbear start 2>/dev/null || dropbear -R -p 22 2>/dev/null
+fi
+sleep 1
+pgrep dropbear >/dev/null 2>&1 && echo "dropbear: running" || echo "dropbear: NOT running"
+
+# --- 3. report the address so it can be read off the card ------------------
+{
+  echo "LimenOS bootstrap ran at $(date 2>/dev/null)"
+  echo
+  echo "interfaces:"
+  ip addr 2>/dev/null | grep -E "^[0-9]+:|inet " 
+  echo
+  echo "dropbear: $(pgrep dropbear >/dev/null 2>&1 && echo running || echo not running)"
+  echo "wifi chip: $(cat /data/wifi_chip 2>/dev/null)"
+  echo "uptime: $(cat /proc/uptime)"
+} > "$CARD/LIMEN-STATUS.txt" 2>/dev/null
+sync
+
+echo "handing back to the stock UI"
+# Non-zero so runmiyoo.sh runs /usr/miyoo/bin/MainUI and the console behaves.
+exit 1
