@@ -306,6 +306,16 @@ def build(out):
         icon(label, os.path.join(icons, key + ".png"))
         icon(label, os.path.join(sel, key + ".png"), selected=True)
 
+    # Ship a single-face TTF alongside the config. See 30-install-theme.sh
+    # for why a .ttc is actively harmful here.
+    import shutil
+    for cand in ("build/limen-ui.ttf", os.path.join(os.path.dirname(__file__),
+                                                    "..", "build", "limen-ui.ttf")):
+        if os.path.exists(cand):
+            shutil.copy2(cand, os.path.join(out, "limen.ttf")); break
+    else:
+        print("  WARNING: build/limen-ui.ttf missing - theme will have no font")
+
     with open(os.path.join(out, "config.json"), "w") as fh:
         json.dump(CONFIG, fh, indent=4)
 

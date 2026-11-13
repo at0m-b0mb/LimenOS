@@ -57,11 +57,17 @@ mv "$DEST/Themes/LimenOS.tmp" "$DEST/Themes/LimenOS"
 find "$DEST/Themes/LimenOS" -name "._*" -delete 2>/dev/null || true
 find "$DEST/Themes/LimenOS" -name ".DS_Store" -delete 2>/dev/null || true
 
-# the theme needs a font for MainUI's dynamic text; borrow one already on the
-# card rather than redistributing a typeface with the project
-for cand in "$DEST/miyoo355/app/Exo-2-Bold-Italic.ttf" "$DEST/miyoo355/app/HENB.TTF"; do
-    [ -f "$cand" ] && { cp "$cand" "$DEST/Themes/LimenOS/$(basename "$cand")"; break; }
-done
+# The theme MUST ship a font, and it must be a SINGLE-FACE .ttf.
+#
+# A theme with no font makes MainUI hang on the loading screen: it cannot
+# draw text and does not crash, so nothing appears in dmesg. And borrowing
+# the firmware's wqy-microhei.ttc is worse than nothing -- a .ttc is a font
+# COLLECTION ("ttcf" magic), and renaming one to .ttf made MainUI render
+# every string twice, which reads exactly like a drop shadow. A real single
+# face starts 00 01 00 00.
+if [ ! -f "$HERE/build/Themes/LimenOS/limen.ttf" ]; then
+    echo "[limen] WARNING: no limen.ttf in the theme - MainUI will hang on loading"
+fi
 
 sync
 echo "[limen] installed: $(find "$DEST/Themes/LimenOS" -type f | wc -l | tr -d ' ') files, $(du -sh "$DEST/Themes/LimenOS" | cut -f1)"
