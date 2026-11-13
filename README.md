@@ -43,6 +43,32 @@ Wi-Fi driver beyond its own soldered-on radio, no `TUN`, no `BRIDGE`, no
 nothing binds. So LimenOS is two projects: a Debian userland you can have in an
 afternoon, and a kernel that makes the wireless half real.
 
+## Confirmed on hardware — 2026-11-13
+
+M1 runs on a real Miyoo Flip. The device's kernel build string is
+byte-identical to the analysed image, so every static finding applies to it
+exactly.
+
+| Verified on the device | Result |
+|---|---|
+| Root code execution from the SD card at boot | works, via the vendor's own hook, console still boots normally |
+| Debian trixie arm64 chroot | **455 packages**, `nmap` / `tcpdump` / `scapy` / `iw` / `binwalk` / `flashrom` all executing |
+| `AF_PACKET` capture | live traffic captured, **zero dropped packets** |
+| Which radio | `0bda:b733` — **RTL8733BU**, dual-band (14 × 2.4 GHz, 28 × 5 GHz) |
+| **Monitor mode** | ❌ **NOT SUPPORTED — measured** |
+
+```
+# iw phy phy1 interface add mon0 type monitor
+command failed: Operation not supported (-95)
+```
+
+The driver advertises only `IBSS / managed / AP / P2P-client / P2P-GO`. This
+was previously documented as "plausible but unproven"; it is now proven,
+negatively. No userland tooling changes it — it needs a different driver,
+which needs a different kernel. **That is exactly what M2 is for.**
+
+Full measurements: [docs/01 §8](docs/01-hardware-ground-truth.md).
+
 ## Measured, not assumed
 
 Every hardware claim comes out of a stock firmware image and is reproducible —
