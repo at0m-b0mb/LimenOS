@@ -2,7 +2,7 @@
     "name": "LimenOS",
     "author": "at0m-b0mb",
     "description": "Warm paper and gold. One accent, used sparingly.",
-    "hideIconTitle": false,
+    "hideIconTitle": true,
     "hideLabels": {
         "icons": false,
         "hints": false
@@ -13,6 +13,7 @@
     },
     "batteryPercentage": {
         "visible": true,
+        "font": "limen.ttf",
         "size": 14,
         "color": "#575144",
         "textAlign": "center",
@@ -21,10 +22,12 @@
         "offsetY": 0
     },
     "title": {
+        "font": "limen.ttf",
         "size": 28,
         "color": "#1B1813"
     },
     "hint": {
+        "font": "limen.ttf",
         "size": 22,
         "color": "#6B6554"
     },
@@ -35,12 +38,14 @@
         "color": "#7A5D18"
     },
     "grid": {
+        "font": "limen.ttf",
         "grid1x4": 24,
         "grid3x4": 17,
         "color": "#575144",
         "selectedcolor": "#1B1813"
     },
     "list": {
+        "font": "limen.ttf",
         "size": 25,
         "color": "#1B1813"
     }

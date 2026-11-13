@@ -53,10 +53,16 @@ def icon(path, letter, filled):
 WAIT = '''
 # wait for a button, so the screen can actually be read; cap it so a wedged
 # input device cannot strand the launcher
-( sleep 45; kill -TERM $$ 2>/dev/null ) &
-WATCH=$!
-dd if=/dev/input/event5 bs=16 count=4 >/dev/null 2>&1 || sleep 5
+# Hold the screen until a button is pressed.
+# struct input_event is 24 bytes on this 64-bit kernel, not 16, and a single
+# press emits several events, so drain whatever is already queued first and
+# then block for a fresh one. Without the drain the screen flashed past
+# before it could be read.
+( sleep 90; kill -TERM $$ 2>/dev/null ) & WATCH=$!
+dd if=/dev/input/event5 iflag=nonblock of=/dev/null bs=24 count=64 2>/dev/null
+dd if=/dev/input/event5 bs=24 count=2 >/dev/null 2>&1 || sleep 8
 kill $WATCH 2>/dev/null
+hide
 '''
 
 APPS = {
@@ -76,7 +82,7 @@ case "$ONLINE" in
       ;;
 esac
 sleep 1
-"$SAY" --title "CPU" \
+show --title "CPU" --footer "> Press a button to return" \
   "$NOTE" \
   "" \
   "now       $STATE" \
@@ -87,8 +93,6 @@ sleep 1
   "" \
   "Single-thread speed is unchanged." \
   "Run this again to switch back." \
-  "" \
-  "> Press a button to return"
 '''),
     "LimenOS Status": dict(
         letter="S",
@@ -96,7 +100,7 @@ sleep 1
         body=r'''
 IP=$(ip -4 addr show wlan0 2>/dev/null | awk '/inet /{print $2}' | cut -d/ -f1 | head -1)
 CARD=$(blkid 2>/dev/null | grep -c LIMEN_ROOT)
-"$SAY" --title "Status" \
+show --title "Status" --footer "> Press a button to return" \
   "> $(tr -d '\0' < /proc/device-tree/model 2>/dev/null)" \
   "" \
   "kernel    $(uname -r)" \
@@ -110,8 +114,6 @@ CARD=$(blkid 2>/dev/null | grep -c LIMEN_ROOT)
   "wifi      ${IP:-not connected}" \
   "ssh       $(pgrep dropbear >/dev/null 2>&1 && echo running || echo stopped)" \
   "limen sd  $([ "$CARD" -gt 0 ] && echo present || echo not inserted)" \
-  "" \
-  "> Press a button to return"
 '''),
     "LimenOS Deck": dict(
         letter="D",
@@ -160,7 +162,7 @@ if [ -n "$ROOTDEV" ]; then
     fi
 fi
 IP=$(ip -4 addr show wlan0 2>/dev/null | awk '/inet /{print $2}' | cut -d/ -f1 | head -1)
-"$SAY" --title "Deck" \
+show --title "Deck" --footer "> Press a button to return" \
   "> Ready" \
   "" \
   "ssh root@${IP:-<no wifi>}" \
@@ -170,8 +172,6 @@ IP=$(ip -4 addr show wlan0 2>/dev/null | awk '/inet /{print $2}' | cut -d/ -f1 |
   "limen sd  $STATE" \
   "" \
   "Then:  chroot /tmp/limen /bin/bash -l" \
-  "" \
-  "> Press a button to return"
 '''),
 }
 
@@ -182,8 +182,29 @@ LAUNCH = '''#!/bin/sh
 PROGDIR=$(dirname "$0")
 cd "$PROGDIR" || exit 1
 echo 1 > /tmp/stay_awake 2>/dev/null
-SAY="$PROGDIR/limen-say"
-[ -x "$SAY" ] || SAY=/usr/bin/true
+SAYBIN="$PROGDIR/limen-say"
+PNG=/tmp/limen-screen.png
+FBPID=""
+# Render to a PNG and display it with the vendor's own fbdisplay.
+#
+# Writing straight to /dev/fb0 is NOT reliably visible: MainUI composites
+# through DRM and its plane sits above the fbdev emulation, so the pixels can
+# land where the panel never shows them. fbdisplay is the path the firmware
+# itself uses for its loading screen, so it is the one that works. It runs
+# until /tmp/fbdisplay_exit appears, which is how runmiyoo.sh stops it.
+show() {
+  [ -x "$SAYBIN" ] || return 1
+  rm -f /tmp/fbdisplay_exit 2>/dev/null
+  "$SAYBIN" --png "$PNG" "$@" || return 1
+  fbdisplay "$PNG" >/dev/null 2>&1 &
+  FBPID=$!
+}
+hide() {
+  touch /tmp/fbdisplay_exit 2>/dev/null
+  sleep 1
+  [ -n "$FBPID" ] && kill "$FBPID" 2>/dev/null
+  rm -f /tmp/fbdisplay_exit 2>/dev/null
+}
 exec >>/tmp/limen-app.log 2>&1
 echo "=== {name} $(date 2>/dev/null) ==="
 {body}
@@ -193,10 +214,29 @@ exit 0
 '''
 
 
+
+def _fill(tpl: str, **kw) -> str:
+    """Substitute {name}/{body}/{wait}/{need} without str.format.
+
+    The template contains shell functions, and every brace in them is a
+    placeholder as far as str.format is concerned -- it raised
+    KeyError: '\n  ' the moment show() { ... } was added. Plain replacement
+    has no opinion about braces.
+    """
+    out = tpl
+    for k, v in kw.items():
+        out = out.replace("{" + k + "}", v)
+    return out
+
 def build(out, saybin):
     made = []
     for name, spec in APPS.items():
-        d = os.path.join(out, name)
+        # MainUI builds its launch command as "cd %s; chmod a+x %s; %s" with
+        # NO QUOTING, so a folder name containing a space makes `cd` take two
+        # arguments and the whole chain dies silently -- the app shows only
+        # LOADING and the log stays empty. Folder names are hyphenated; the
+        # pretty name lives in config.json "label".
+        d = os.path.join(out, name.replace(" ", "-"))
         os.makedirs(d, exist_ok=True)
         icon(os.path.join(d, "icon.png"), spec["letter"], False)
         icon(os.path.join(d, "iconsel.png"), spec["letter"], True)
@@ -206,7 +246,7 @@ def build(out, saybin):
                       fh, indent=1)
         p = os.path.join(d, "launch.sh")
         with open(p, "w") as fh:
-            fh.write(LAUNCH.format(name=name, body=spec["body"], wait=WAIT))
+            fh.write(_fill(LAUNCH, name=name, body=spec["body"], wait=WAIT))
         os.chmod(p, 0o755)
         if saybin and os.path.exists(saybin):
             import shutil

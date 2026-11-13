@@ -1,12 +1,33 @@
 #!/bin/sh
 # LimenOS launcher entry. Run as root by the stock firmware, which executes
-# ${CUSTOMER_DIR}/App/<name>/launch.sh through /tmp/cmd_to_run.sh.
+# ${{CUSTOMER_DIR}}/App/<name>/launch.sh through /tmp/cmd_to_run.sh.
 # Nothing here writes to internal flash.
 PROGDIR=$(dirname "$0")
 cd "$PROGDIR" || exit 1
 echo 1 > /tmp/stay_awake 2>/dev/null
-SAY="$PROGDIR/limen-say"
-[ -x "$SAY" ] || SAY=/usr/bin/true
+SAYBIN="$PROGDIR/limen-say"
+PNG=/tmp/limen-screen.png
+FBPID=""
+# Render to a PNG and display it with the vendor's own fbdisplay.
+#
+# Writing straight to /dev/fb0 is NOT reliably visible: MainUI composites
+# through DRM and its plane sits above the fbdev emulation, so the pixels can
+# land where the panel never shows them. fbdisplay is the path the firmware
+# itself uses for its loading screen, so it is the one that works. It runs
+# until /tmp/fbdisplay_exit appears, which is how runmiyoo.sh stops it.
+show() {
+  [ -x "$SAYBIN" ] || return 1
+  rm -f /tmp/fbdisplay_exit 2>/dev/null
+  "$SAYBIN" --png "$PNG" "$@" || return 1
+  fbdisplay "$PNG" >/dev/null 2>&1 &
+  FBPID=$!
+}
+hide() {
+  touch /tmp/fbdisplay_exit 2>/dev/null
+  sleep 1
+  [ -n "$FBPID" ] && kill "$FBPID" 2>/dev/null
+  rm -f /tmp/fbdisplay_exit 2>/dev/null
+}
 exec >>/tmp/limen-app.log 2>&1
 echo "=== LimenOS Deck $(date 2>/dev/null) ==="
 
@@ -53,7 +74,7 @@ if [ -n "$ROOTDEV" ]; then
     fi
 fi
 IP=$(ip -4 addr show wlan0 2>/dev/null | awk '/inet /{print $2}' | cut -d/ -f1 | head -1)
-"$SAY" --title "Deck" \
+show --title "Deck" --footer "> Press a button to return" \
   "> Ready" \
   "" \
   "ssh root@${IP:-<no wifi>}" \
@@ -63,16 +84,20 @@ IP=$(ip -4 addr show wlan0 2>/dev/null | awk '/inet /{print $2}' | cut -d/ -f1 |
   "limen sd  $STATE" \
   "" \
   "Then:  chroot /tmp/limen /bin/bash -l" \
-  "" \
-  "> Press a button to return"
 
 
 # wait for a button, so the screen can actually be read; cap it so a wedged
 # input device cannot strand the launcher
-( sleep 45; kill -TERM $$ 2>/dev/null ) &
-WATCH=$!
-dd if=/dev/input/event5 bs=16 count=4 >/dev/null 2>&1 || sleep 5
+# Hold the screen until a button is pressed.
+# struct input_event is 24 bytes on this 64-bit kernel, not 16, and a single
+# press emits several events, so drain whatever is already queued first and
+# then block for a fresh one. Without the drain the screen flashed past
+# before it could be read.
+( sleep 90; kill -TERM $$ 2>/dev/null ) & WATCH=$!
+dd if=/dev/input/event5 iflag=nonblock of=/dev/null bs=24 count=64 2>/dev/null
+dd if=/dev/input/event5 bs=24 count=2 >/dev/null 2>&1 || sleep 8
 kill $WATCH 2>/dev/null
+hide
 
 rm -f /tmp/stay_awake 2>/dev/null
 exit 0

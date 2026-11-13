@@ -49,9 +49,16 @@ def icon(path, letter, filled):
 
 
 WAIT = '''
-( sleep 60; kill -TERM $$ 2>/dev/null ) & WATCH=$!
-dd if=/dev/input/event5 bs=16 count=4 >/dev/null 2>&1 || sleep 6
+# Hold the screen until a button is pressed.
+# struct input_event is 24 bytes on this 64-bit kernel, not 16, and a single
+# press emits several events, so drain whatever is already queued first and
+# then block for a fresh one. Without the drain the screen flashed past
+# before it could be read.
+( sleep 90; kill -TERM $$ 2>/dev/null ) & WATCH=$!
+dd if=/dev/input/event5 iflag=nonblock of=/dev/null bs=24 count=64 2>/dev/null
+dd if=/dev/input/event5 bs=24 count=2 >/dev/null 2>&1 || sleep 8
 kill $WATCH 2>/dev/null
+hide
 '''
 
 # a shell helper every entry gets: report a missing tool instead of guessing
@@ -95,7 +102,7 @@ else
     IFS=$OLDIFS
     set -- "$@" "" "WEP and open networks are the ones" "worth fixing on your own kit."
 fi
-"$SAY" --title "WiFi Survey" "$@" "" "> Press a button to return"
+show --title "WiFi Survey" --footer "> Press a button to return" "$@" 
 '''),
 
     "LimenOS Neighbours": dict(
@@ -124,7 +131,7 @@ else
     for l in $HOSTS; do set -- "$@" "$l"; done
     IFS=$OLDIFS
 fi
-"$SAY" --title "Neighbours" "$@" "" "> Press a button to return"
+show --title "Neighbours" --footer "> Press a button to return" "$@" 
 '''),
 
     "LimenOS USB HID": dict(
@@ -159,7 +166,7 @@ else
         set -- "> Could not arm it" "" "/dev/hidg0 never appeared." "See /tmp/usbdevice.log"
     fi
 fi
-"$SAY" --title "USB HID" "$@" "" "> Run again to toggle"
+show --title "USB HID" --footer "> Press a button to return" "$@" "" "> Run again to toggle"
 '''),
 
     "LimenOS Ports": dict(
@@ -183,7 +190,7 @@ set -- "$@" "" \
   "CP210x, FTDI and PL2303 adapters work" \
   "on the UPPER port. CH340 does not:" \
   "this kernel has no ch341 driver."
-"$SAY" --title "Ports" "$@" "" "> Press a button to return"
+show --title "Ports" --footer "> Press a button to return" "$@" 
 '''),
 
     "LimenOS Audit": dict(
@@ -197,7 +204,7 @@ KEYS=$([ -f /root/.ssh/authorized_keys ] && echo "installed" || echo "none")
 TELNET=$(pgrep telnetd >/dev/null 2>&1 && echo "RUNNING - turn this off" || echo "off")
 LISTEN=$(netstat -ltn 2>/dev/null | awk 'NR>2' | wc -l)
 HIDG=$([ -e /dev/hidg0 ] && echo "ARMED" || echo "off")
-"$SAY" --title "Audit" \
+show --title "Audit" --footer "> Press a button to return" \
   "> This device, checked against itself" \
   "" \
   "root password   $ROOTPW" \
@@ -212,8 +219,6 @@ HIDG=$([ -e /dev/hidg0 ] && echo "ARMED" || echo "off")
   "default and is widely known. Anyone on" \
   "your network can reach this device over" \
   "SSH while it is powered on." \
-  "" \
-  "> Press a button to return"
 '''),
 }
 
@@ -223,8 +228,29 @@ LAUNCH = '''#!/bin/sh
 PROGDIR=$(dirname "$0")
 cd "$PROGDIR" || exit 1
 echo 1 > /tmp/stay_awake 2>/dev/null
-SAY="$PROGDIR/limen-say"
-[ -x "$SAY" ] || SAY=/bin/true
+SAYBIN="$PROGDIR/limen-say"
+PNG=/tmp/limen-screen.png
+FBPID=""
+# Render to a PNG and display it with the vendor's own fbdisplay.
+#
+# Writing straight to /dev/fb0 is NOT reliably visible: MainUI composites
+# through DRM and its plane sits above the fbdev emulation, so the pixels can
+# land where the panel never shows them. fbdisplay is the path the firmware
+# itself uses for its loading screen, so it is the one that works. It runs
+# until /tmp/fbdisplay_exit appears, which is how runmiyoo.sh stops it.
+show() {
+  [ -x "$SAYBIN" ] || return 1
+  rm -f /tmp/fbdisplay_exit 2>/dev/null
+  "$SAYBIN" --png "$PNG" "$@" || return 1
+  fbdisplay "$PNG" >/dev/null 2>&1 &
+  FBPID=$!
+}
+hide() {
+  touch /tmp/fbdisplay_exit 2>/dev/null
+  sleep 1
+  [ -n "$FBPID" ] && kill "$FBPID" 2>/dev/null
+  rm -f /tmp/fbdisplay_exit 2>/dev/null
+}
 exec >>/tmp/limen-app.log 2>&1
 echo "=== {name} $(date 2>/dev/null) ==="
 {need}
@@ -235,10 +261,29 @@ exit 0
 '''
 
 
+
+def _fill(tpl: str, **kw) -> str:
+    """Substitute {name}/{body}/{wait}/{need} without str.format.
+
+    The template contains shell functions, and every brace in them is a
+    placeholder as far as str.format is concerned -- it raised
+    KeyError: '\n  ' the moment show() { ... } was added. Plain replacement
+    has no opinion about braces.
+    """
+    out = tpl
+    for k, v in kw.items():
+        out = out.replace("{" + k + "}", v)
+    return out
+
 def build(out, saybin):
     made = []
     for name, spec in APPS.items():
-        d = os.path.join(out, name)
+        # MainUI builds its launch command as "cd %s; chmod a+x %s; %s" with
+        # NO QUOTING, so a folder name containing a space makes `cd` take two
+        # arguments and the whole chain dies silently -- the app shows only
+        # LOADING and the log stays empty. Folder names are hyphenated; the
+        # pretty name lives in config.json "label".
+        d = os.path.join(out, name.replace(" ", "-"))
         os.makedirs(d, exist_ok=True)
         icon(os.path.join(d, "icon.png"), spec["letter"], False)
         icon(os.path.join(d, "iconsel.png"), spec["letter"], True)
@@ -246,8 +291,7 @@ def build(out, saybin):
                    "launch": "launch.sh", "description": spec["description"]},
                   open(os.path.join(d, "config.json"), "w"), indent=1)
         p = os.path.join(d, "launch.sh")
-        open(p, "w").write(LAUNCH.format(name=name, body=spec["body"],
-                                         wait=WAIT, need=NEED))
+        open(p, "w").write(_fill(LAUNCH, name=name, body=spec["body"], wait=WAIT, need=NEED))
         os.chmod(p, 0o755)
         if saybin and os.path.exists(saybin):
             shutil.copy2(saybin, os.path.join(d, "limen-say"))

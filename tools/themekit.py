@@ -234,20 +234,26 @@ CONFIG = {
     "name": "LimenOS",
     "author": "at0m-b0mb",
     "description": "Warm paper and gold. One accent, used sparingly.",
-    "hideIconTitle": False,
+    # The icons carry their own name typographically, so letting MainUI draw
+    # the label too renders it twice and reads as a drop shadow.
+    "hideIconTitle": True,
     "hideLabels": {"icons": False, "hints": False},
     "frame": {"border-left": 0, "border-right": 0},
     "batteryPercentage": {
-        "visible": True, "size": 14, "color": "#575144",
+        "visible": True, "font": "limen.ttf", "size": 14, "color": "#575144",
         "textAlign": "center", "fixed": True, "offsetX": 0, "offsetY": 0,
     },
-    "title":       {"size": 28, "color": "#1B1813"},
-    "hint":        {"size": 22, "color": "#6B6554"},
+    # A theme MUST name a font and ship it. Without one MainUI cannot draw
+    # text and sits on the loading screen forever -- it does not crash, so
+    # there is nothing in dmesg to find. The installer copies a font off the
+    # device rather than redistributing a typeface with the project.
+    "title":       {"font": "limen.ttf", "size": 28, "color": "#1B1813"},
+    "hint":        {"font": "limen.ttf", "size": 22, "color": "#6B6554"},
     "currentpage": {"color": "#1B1813"},
     "total":       {"color": "#7A5D18"},
-    "grid":        {"grid1x4": 24, "grid3x4": 17,
+    "grid":        {"font": "limen.ttf", "grid1x4": 24, "grid3x4": 17,
                     "color": "#575144", "selectedcolor": "#1B1813"},
-    "list":        {"size": 25, "color": "#1B1813"},
+    "list":        {"font": "limen.ttf", "size": 25, "color": "#1B1813"},
 }
 
 
