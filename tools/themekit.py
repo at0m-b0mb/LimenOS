@@ -321,9 +321,11 @@ CONFIG = {
     "name": "LimenOS",
     "author": "at0m-b0mb",
     "description": "Warm paper and gold. One accent, used sparingly.",
-    # The icons carry their own name typographically, so letting MainUI draw
-    # the label too renders it twice and reads as a drop shadow.
-    "hideIconTitle": True,
+    # Back to the stock value. Every working theme ships hideIconTitle:false,
+    # and setting it true did NOT stop the duplicate label -- the selected
+    # item still rendered twice. Matching the themes that demonstrably work
+    # is worth more than a flag whose meaning I inferred.
+    "hideIconTitle": False,
     "hideLabels": {"icons": False, "hints": False},
     "frame": {"border-left": 0, "border-right": 0},
     "batteryPercentage": {
@@ -338,8 +340,15 @@ CONFIG = {
     "hint":        {"font": "limen.ttf", "size": 24, "color": "#6B6554"},
     "currentpage": {"color": "#1B1813"},
     "total":       {"color": "#7A5D18"},
-    "grid":        {"font": "limen.ttf", "grid1x4": 26, "grid3x4": 18,
-                    "color": "#575144", "selectedcolor": "#1B1813"},
+    # grid1x4 and grid3x4 are the label sizes for the 4-across and 12-across
+    # layouts, and MainUI neither truncates nor shrinks a long name: on the
+    # real screen "ATARI LYNX" ran straight out of its 155px tile. They are
+    # held EQUAL as well, because the report from the device was "double
+    # font" on the SELECTED item -- two sizes overlapping is exactly what that
+    # looks like, and matching them makes any double draw invisible whatever
+    # is causing it. Same reasoning for the two colours.
+    "grid":        {"font": "limen.ttf", "grid1x4": 18, "grid3x4": 18,
+                    "color": "#1B1813", "selectedcolor": "#1B1813"},
     "list":        {"font": "limen.ttf", "size": 27, "color": "#1B1813"},
 }
 

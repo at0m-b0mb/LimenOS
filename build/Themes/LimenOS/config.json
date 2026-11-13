@@ -2,7 +2,7 @@
     "name": "LimenOS",
     "author": "at0m-b0mb",
     "description": "Warm paper and gold. One accent, used sparingly.",
-    "hideIconTitle": true,
+    "hideIconTitle": false,
     "hideLabels": {
         "icons": false,
         "hints": false
@@ -39,9 +39,9 @@
     },
     "grid": {
         "font": "limen.ttf",
-        "grid1x4": 26,
+        "grid1x4": 18,
         "grid3x4": 18,
-        "color": "#575144",
+        "color": "#1B1813",
         "selectedcolor": "#1B1813"
     },
     "list": {
