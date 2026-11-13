@@ -97,6 +97,27 @@ Check it yourself:
 ./build/02-audit-kernel-config.sh research/stock-firmware/stock-kernel-5.10.160.config
 ```
 
+## A theme for the stock launcher
+
+![LimenOS theme](images/theme-preview.png)
+
+The Flip's launcher is themeable, and `system.json` simply points at a folder
+under `Themes/`. So LimenOS ships one, in the same warm-paper-and-gold palette
+as the rest of the project:
+
+```bash
+python3 tools/themekit.py && ./build/30-install-theme.sh
+```
+
+`themekit.py` generates all 170 assets from code — backgrounds, bars, list
+items, game cards, buttons, popup menus and 69 system icons in both normal and
+selected states — at the exact pixel sizes the launcher expects.
+
+**The installer is purely additive.** It adds one folder and deletes nothing:
+your games, saves, apps and existing themes are untouched, and it will not even
+edit `system.json` unless you pass `--activate`. Switch with
+**Settings → Theme → LimenOS**, and switch back the same way.
+
 ## Try it before you build anything
 
 This needs **no custom firmware at all** — it runs on the Miyoo firmware already
