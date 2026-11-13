@@ -10,6 +10,7 @@ Imported by themekit.py. Sizes are taken from a real installed theme, not
 guessed: see docs/08-theme-contract.md.
 """
 from __future__ import annotations
+import os
 import math, os
 
 from PIL import Image, ImageDraw, ImageFont
@@ -26,6 +27,36 @@ SHINE   = (195, 155, 36, 255)
 CLEAR   = (0, 0, 0, 0)
 
 SERIF = "/System/Library/Fonts/Supplemental/Iowan Old Style.ttc"
+
+# ---------------------------------------------------------------------------
+# DARK BY DEFAULT, and not for taste.
+#
+# MainUI draws a dark shadow behind every label. Each of the five stock themes
+# ships light text on a dark background (measured: background brightness
+# 59/255, text #FFFFFF/#ABABAB/#BBBBBB), so that shadow is invisible on all of
+# them. LimenOS was the only light theme, and on pale paper the shadow landed
+# beside dark glyphs and read as doubled text -- the fault reported from the
+# device, which no theme setting could fix.
+#
+# So the canvas is TRUE BLACK, per the house style, and the text is warm
+# off-white. Set LIMEN_LIGHT=1 to build the paper variant anyway.
+# ---------------------------------------------------------------------------
+if not os.environ.get("LIMEN_LIGHT"):
+    PAPER       = (0, 0, 0, 255)          # true black canvas
+    SURFACE     = (19, 19, 18, 255)
+    INK         = (243, 240, 233, 255)    # warm off-white
+    MUTED       = (162, 156, 145, 255)
+    FAINT       = (140, 135, 124, 255)
+    RULE        = (43, 43, 40, 255)
+    BRASS       = (217, 183, 92, 255)     # gold lifts on black
+    SHINE       = (241, 200, 75, 255)
+    try:
+        RULE_STRONG = (61, 60, 56, 255)
+    except NameError:
+        pass
+    RULE_S      = (61, 60, 56, 255)
+LIMEN_DARK = not os.environ.get("LIMEN_LIGHT")
+
 SANS  = "/System/Library/Fonts/SFNS.ttf"
 SS = 4
 

@@ -19,6 +19,7 @@ games and saves are untouched, and the Flip switches between them in
 Settings.
 """
 from __future__ import annotations
+import os
 import json, os, sys
 
 try:
@@ -39,6 +40,36 @@ SHINE       = (195, 155, 36, 255)    # #C39B24
 CLEAR       = (0, 0, 0, 0)
 
 SERIF = "/System/Library/Fonts/Supplemental/Iowan Old Style.ttc"
+
+# ---------------------------------------------------------------------------
+# DARK BY DEFAULT, and not for taste.
+#
+# MainUI draws a dark shadow behind every label. Each of the five stock themes
+# ships light text on a dark background (measured: background brightness
+# 59/255, text #FFFFFF/#ABABAB/#BBBBBB), so that shadow is invisible on all of
+# them. LimenOS was the only light theme, and on pale paper the shadow landed
+# beside dark glyphs and read as doubled text -- the fault reported from the
+# device, which no theme setting could fix.
+#
+# So the canvas is TRUE BLACK, per the house style, and the text is warm
+# off-white. Set LIMEN_LIGHT=1 to build the paper variant anyway.
+# ---------------------------------------------------------------------------
+if not os.environ.get("LIMEN_LIGHT"):
+    PAPER       = (0, 0, 0, 255)          # true black canvas
+    SURFACE     = (19, 19, 18, 255)
+    INK         = (243, 240, 233, 255)    # warm off-white
+    MUTED       = (162, 156, 145, 255)
+    FAINT       = (140, 135, 124, 255)
+    RULE        = (43, 43, 40, 255)
+    BRASS       = (217, 183, 92, 255)     # gold lifts on black
+    SHINE       = (241, 200, 75, 255)
+    try:
+        RULE_STRONG = (61, 60, 56, 255)
+    except NameError:
+        pass
+    RULE_S      = (61, 60, 56, 255)
+LIMEN_DARK = not os.environ.get("LIMEN_LIGHT")
+
 SANS  = "/System/Library/Fonts/SFNS.ttf"
 
 SS = 3   # supersample factor
@@ -329,17 +360,17 @@ CONFIG = {
     "hideLabels": {"icons": False, "hints": False},
     "frame": {"border-left": 0, "border-right": 0},
     "batteryPercentage": {
-        "visible": True, "font": "limen.ttf", "size": 14, "color": "#575144",
+        "visible": True, "font": "limen.ttf", "size": 14, "color": "#A29C91",
         "textAlign": "center", "fixed": True, "offsetX": 0, "offsetY": 0,
     },
     # A theme MUST name a font and ship it. Without one MainUI cannot draw
     # text and sits on the loading screen forever -- it does not crash, so
     # there is nothing in dmesg to find. The installer copies a font off the
     # device rather than redistributing a typeface with the project.
-    "title":       {"font": "limen.ttf", "size": 30, "color": "#1B1813"},
-    "hint":        {"font": "limen.ttf", "size": 24, "color": "#6B6554"},
-    "currentpage": {"color": "#1B1813"},
-    "total":       {"color": "#7A5D18"},
+    "title":       {"font": "limen.ttf", "size": 30, "color": "#F3F0E9"},
+    "hint":        {"font": "limen.ttf", "size": 24, "color": "#8C877C"},
+    "currentpage": {"color": "#F3F0E9"},
+    "total":       {"color": "#D9B75C"},
     # grid1x4 and grid3x4 are the label sizes for the 4-across and 12-across
     # layouts, and MainUI neither truncates nor shrinks a long name: on the
     # real screen "ATARI LYNX" ran straight out of its 155px tile. They are
@@ -348,8 +379,8 @@ CONFIG = {
     # looks like, and matching them makes any double draw invisible whatever
     # is causing it. Same reasoning for the two colours.
     "grid":        {"font": "limen.ttf", "grid1x4": 18, "grid3x4": 18,
-                    "color": "#1B1813", "selectedcolor": "#1B1813"},
-    "list":        {"font": "limen.ttf", "size": 27, "color": "#1B1813"},
+                    "color": "#F3F0E9", "selectedcolor": "#F3F0E9"},
+    "list":        {"font": "limen.ttf", "size": 27, "color": "#F3F0E9"},
 }
 
 
