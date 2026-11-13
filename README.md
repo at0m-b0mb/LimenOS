@@ -145,9 +145,9 @@ external adapter.
 
 ## Scope
 
-For networks and devices **you own**, or engagements with **written**
-permission. No unattended attack modes, no jamming, no deauth floods. See
-`SCOPE.md`.
+For networks and devices you own, or engagements with written permission — no unattended attack modes, no jamming, no deauth floods.
+
+See [SCOPE.md](SCOPE.md) for the full statement.
 
 ---
 
