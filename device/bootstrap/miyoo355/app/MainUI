@@ -3,33 +3,28 @@
 # LimenOS bootstrap hook — runs as root at boot on the stock Miyoo firmware.
 # ============================================================================
 # WHY THIS FILE IS CALLED MainUI
-#   /usr/miyoo/bin/runmiyoo.sh does, verbatim:
+#   /usr/miyoo/bin/runmiyoo.sh contains, verbatim:
 #       if [ -d ${CUSTOMER_DIR} ] ; then ... ${CUSTOMER_DIR}/app/MainUI
-#   where CUSTOMER_DIR is /media/sdcard0/miyoo355/ or /media/sdcard1/miyoo355/.
-#   So the stock firmware deliberately prefers an SD-card MainUI over its own.
-#   This is the vendor's own extension point and the same one every Miyoo CFW
-#   uses. Nothing is patched and nothing is written to internal flash.
+#   with CUSTOMER_DIR = /media/sdcard0/miyoo355/ or /media/sdcard1/miyoo355/.
+#   The stock firmware deliberately prefers an SD-card MainUI over its own.
+#   This is the vendor extension point every Miyoo CFW uses. Nothing is
+#   patched and nothing is ever written to internal flash.
 #
-# WHAT IT DOES
-#   1. installs an SSH public key so you can get a shell on your own device
-#   2. makes sure dropbear is running
-#   3. exits NON-ZERO on purpose, so runmiyoo.sh falls through to the real
-#      /usr/miyoo/bin/MainUI and you still get your normal console UI
-#
-# It writes only to tmpfs and to the SD card. It never touches /dev/mtd*.
+# It exits NON-ZERO on purpose so runmiyoo.sh falls through to the real
+# /usr/miyoo/bin/MainUI and the console still behaves like a console.
 # ============================================================================
 LOG=/tmp/limen-bootstrap.log
 exec >>"$LOG" 2>&1
 echo "=== limen bootstrap $(date 2>/dev/null) ==="
 
-CARD="$(dirname "$(dirname "$0")")"     # .../miyoo355
-CARD="$(dirname "$CARD")"                # the card mountpoint
-echo "card mounted at: $CARD"
+APPDIR="$(dirname "$0")"                  # .../miyoo355/app
+CARD="$(dirname "$(dirname "$APPDIR")")" # the card mountpoint
+echo "card: $CARD"
 
-# --- 1. SSH key ------------------------------------------------------------
-# /root lives in the read-only squashfs, so bind-mount a writable dir over it.
+# --- SSH key (works once the Flip is on wifi) ------------------------------
+# /root is in a read-only squashfs, so bind-mount a writable copy over it.
 if [ ! -f /root/.ssh/authorized_keys ]; then
-    mkdir -p /tmp/limen-root/.ssh
+    mkdir -p /tmp/limen-root
     cp -a /root/. /tmp/limen-root/ 2>/dev/null
     mkdir -p /tmp/limen-root/.ssh
     cat > /tmp/limen-root/.ssh/authorized_keys <<'KEYEOF'
@@ -37,30 +32,61 @@ ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFPHRXdNECX9sTsJxT/weLuPeFkzYL5pefB39K0UTTqk
 KEYEOF
     chmod 700 /tmp/limen-root/.ssh
     chmod 600 /tmp/limen-root/.ssh/authorized_keys
-    mount --bind /tmp/limen-root /root && echo "authorized_keys installed via bind-mount"
+    mount --bind /tmp/limen-root /root && echo "ssh key installed"
+fi
+pgrep dropbear >/dev/null 2>&1 || /etc/init.d/S50dropbear start 2>/dev/null
+
+# --- USB serial console  (OPT-IN) ------------------------------------------
+# The stock kernel has CONFIG_USB_F_ACM=y and CONFIG_USB_CONFIGFS_ACM=y, so the
+# lower USB-C can present a serial port. That gives a shell with no network and
+# no UART adapter. It is a ROOT SHELL on a cable, so it is deliberately
+# opt-in: it only starts if you create a file named LIMEN-USB-SHELL on the
+# card. Delete that file to turn it off.
+if [ -f "$CARD/LIMEN-USB-SHELL" ]; then
+    echo "usb shell: requested"
+    echo "usb_acm_en" > /tmp/.usb_config
+    usbdevice restart >/dev/null 2>&1 || usbdevice start >/dev/null 2>&1
+    n=0
+    while [ $n -lt 15 ] && [ ! -e /dev/ttyGS0 ]; do n=$((n+1)); sleep 1; done
+    if [ -e /dev/ttyGS0 ]; then
+        setsid sh -c 'exec /bin/sh </dev/ttyGS0 >/dev/ttyGS0 2>&1' &
+        echo "usb shell: root shell attached to /dev/ttyGS0"
+    else
+        echo "usb shell: /dev/ttyGS0 never appeared"
+    fi
+else
+    echo "usb shell: not requested (no LIMEN-USB-SHELL file on the card)"
 fi
 
-# --- 2. dropbear -----------------------------------------------------------
-if ! pgrep dropbear >/dev/null 2>&1; then
-    echo "starting dropbear"
-    /etc/init.d/S50dropbear start 2>/dev/null || dropbear -R -p 22 2>/dev/null
-fi
-sleep 1
-pgrep dropbear >/dev/null 2>&1 && echo "dropbear: running" || echo "dropbear: NOT running"
-
-# --- 3. report the address so it can be read off the card ------------------
+# --- status report back onto the card --------------------------------------
 {
-  echo "LimenOS bootstrap ran at $(date 2>/dev/null)"
+  echo "LimenOS bootstrap"
+  echo "boot clock : $(date 2>/dev/null)   (no RTC on this board, so 2017 is normal)"
+  echo "uptime     : $(cut -d' ' -f1 /proc/uptime)s"
   echo
-  echo "interfaces:"
-  ip addr 2>/dev/null | grep -E "^[0-9]+:|inet " 
+  echo "dropbear   : $(pgrep dropbear >/dev/null 2>&1 && echo running || echo NOT running)"
+  echo "ssh key    : $([ -f /root/.ssh/authorized_keys ] && echo installed || echo MISSING)"
+  echo "usb shell  : $([ -e /dev/ttyGS0 ] && echo "/dev/ttyGS0 present" || echo "not enabled")"
   echo
-  echo "dropbear: $(pgrep dropbear >/dev/null 2>&1 && echo running || echo not running)"
-  echo "wifi chip: $(cat /data/wifi_chip 2>/dev/null)"
-  echo "uptime: $(cat /proc/uptime)"
+  echo "--- network ---"
+  ip addr 2>/dev/null | grep -E "^[0-9]+:|inet "
+  echo
+  echo "wifi configured : $([ -f /userdata/cfg/wpa_supplicant.conf ] && echo yes || echo no)"
+  echo "ssid in config  : $(grep -o 'ssid=\"[^\"]*\"' /userdata/cfg/wpa_supplicant.conf 2>/dev/null | head -1)"
+  echo "wpa_supplicant  : $(pgrep wpa_supplicant >/dev/null 2>&1 && echo running || echo not running)"
+  echo
+  echo "--- radio ---"
+  echo "wifi_chip  : $(cat /data/wifi_chip 2>/dev/null)"
+  lsusb 2>/dev/null
+  echo
+  echo "--- LimenOS card ---"
+  blkid 2>/dev/null | grep -i limen
+  echo
+  echo "--- mounts ---"
+  grep -E "sdcard|mmcblk" /proc/mounts 2>/dev/null
 } > "$CARD/LIMEN-STATUS.txt" 2>/dev/null
+cp "$LOG" "$CARD/LIMEN-BOOTLOG.txt" 2>/dev/null
 sync
 
 echo "handing back to the stock UI"
-# Non-zero so runmiyoo.sh runs /usr/miyoo/bin/MainUI and the console behaves.
 exit 1
