@@ -1,0 +1,7 @@
+{
+ "label": "LimenOS Status",
+ "icon": "icon.png",
+ "iconsel": "iconsel.png",
+ "launch": "launch.sh",
+ "description": "Hardware and radio status"
+}

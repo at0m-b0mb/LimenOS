@@ -1,0 +1,7 @@
+{
+ "label": "LimenOS Deck",
+ "icon": "icon.png",
+ "iconsel": "iconsel.png",
+ "launch": "launch.sh",
+ "description": "Bring up the security deck"
+}

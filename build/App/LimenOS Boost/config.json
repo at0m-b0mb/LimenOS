@@ -1,0 +1,7 @@
+{
+ "label": "LimenOS Boost",
+ "icon": "icon.png",
+ "iconsel": "iconsel.png",
+ "launch": "launch.sh",
+ "description": "Turn on the two CPU cores Miyoo leaves off"
+}
