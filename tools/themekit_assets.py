@@ -128,8 +128,12 @@ def nav_tile(path, kind, label, w, h, selected):
         d.rectangle([W * 0.34, H - pad - int(H * 0.030), W * 0.66, H - pad - int(H * 0.012)],
                     fill=BRASS)
     else:
+        # The unselected card was a 1px RULE hairline on near-white paper and
+        # all but vanished on the panel -- in a photo of the real screen only
+        # the selected tile read as a card at all. Heavier stroke, stronger
+        # colour: present, but still clearly secondary to the gold selection.
         d.rounded_rectangle([pad, pad, W - pad, H - pad], radius=int(W * 0.10),
-                            fill=SURFACE, outline=RULE, width=max(1, int(W * 0.010)))
+                            fill=SURFACE, outline=RULE_S, width=max(2, int(W * 0.017)))
         fg, lab = MUTED, MUTED
     # No baked label here either: MainUI draws the name itself, and two
     # labels in two faces is what made the UI look broken on the device.

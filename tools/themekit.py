@@ -116,7 +116,7 @@ def list_item(w, h, path, selected=False, radius=8):
                              h * SS - pad // 2 - int(6 * SS)],
                             radius=int(2.5 * SS), fill=BRASS)
     else:
-        rounded(d, box, radius * SS, fill=SURFACE, outline=RULE, width=max(1, int(1 * SS)))
+        rounded(d, box, radius * SS, fill=SURFACE, outline=RULE_STRONG, width=max(2, int(1.6 * SS)))
     done(img, w, h, path)
 
 
