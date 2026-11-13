@@ -47,14 +47,30 @@ These are why M2 exists. All verified in `stock-kernel-5.10.160.config`:
 Flagged honestly as unverified. Do not plan around them until tested on
 hardware.
 
-- **Internal RTL8733BU monitor/injection is plausible, not proven.**
-  The [libc0607 rtl8733bu fork](https://github.com/libc0607/rtl8733bu-20230626)
-  (built for FPV, where injection matters) reports *"packet injection works
-  well with legacy and MCS rates"* — but also that **monitor RX cannot decode
-  any LDPC-encoded packet at any bandwidth**, and injection is unreliable for
-  some MCS/length combinations. That fork targets kernel 6.8 and is ~3 years
-  old. Treat the internal radio as a **management link**; buy an external
-  adapter for real work.
+- **The internal radio CANNOT do monitor mode. Measured, not estimated.**
+  On real hardware (2026-11-13) the stock RTL8733BU driver advertises only
+  `IBSS / managed / AP / P2P-client / P2P-GO`, and creating a monitor
+  interface fails outright:
+
+  ```
+  # iw phy phy1 interface add mon0 type monitor
+  command failed: Operation not supported (-95)
+  ```
+
+  No userland tool changes this. It needs a different driver, which needs a
+  different kernel — that is M2, and even then the
+  [libc0607 rtl8733bu fork](https://github.com/libc0607/rtl8733bu-20230626)
+  (built for FPV) reports that **monitor RX cannot decode any LDPC-encoded
+  packet at any bandwidth**, with injection unreliable for some MCS/length
+  combinations. That fork targets kernel 6.8 and is ~3 years old.
+
+  **Treat the internal radio as a management link and plan on an external
+  adapter.** It is dual-band (14 × 2.4 GHz, 28 × 5 GHz channels, 20 dBm) and
+  perfectly good for carrying your SSH session — just not for capture.
+
+- **`AF_PACKET` capture on the managed interface does work**, confirmed with
+  live traffic and zero dropped packets. You can see your own host's traffic
+  and anything broadcast to it; you cannot see the air.
 - **2.4 GHz only on some units.** The alternate radio (`RTL8189FU.ko`, really
   an RTL8188FU) is 802.11n 2.4 GHz. If your unit has that part, 5 GHz work is
   off the table internally regardless of driver.

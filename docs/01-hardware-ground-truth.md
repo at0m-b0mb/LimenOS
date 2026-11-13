@@ -146,3 +146,74 @@ DTB confirms `usb@fd800000`, `usb@fd840000`, `rockchip,rk3568-dwc3`,
 - Mainline Linux is *demonstrated* on this board (ROCKNIX fork → Zlyme):
   boot, display, audio, Wi-Fi+BT, GPU (mali_kbase + libmali), SPI NAND,
   both SD slots, HDMI, VPU/RGA, suspend
+
+---
+
+## 8. Measured on real hardware — 2026-11-13
+
+Everything above §7 came from unpacking a firmware image. This section was
+taken from a running Miyoo Flip over SSH. Where the two disagree, this wins.
+
+The running kernel reports `Linux rk3566-buildroot 5.10.160 #152 SMP Mon May 26
+14:30:16 CST 2025`, byte-identical to the build string in the analysed image,
+so the static findings apply to this device exactly.
+
+### The radio, settled
+
+```
+lsusb                     ID 0bda:b733
+/sys/.../product          "802.11n  WLAN Adapter"
+driver                    RTW (built in; only rtk_btusb is a loadable module)
+```
+
+**This unit has the RTL8733BU, not the RTL8188FU alternate.** It is on the USB
+bus, confirming the kernel config.
+
+| Capability | Result |
+|---|---|
+| 2.4 GHz | **14 channels** |
+| 5 GHz | **28 channels** — despite the "802.11n" product string, it was associated on channel 157 at 40 MHz |
+| Max TX power | 20.0 dBm advertised |
+| **Monitor mode** | **NOT SUPPORTED** |
+| Mesh point | not supported |
+| WDS | not supported |
+
+```
+Supported interface modes:
+     * IBSS      * managed      * AP
+     * P2P-client               * P2P-GO
+
+# iw phy phy1 interface add mon0 type monitor
+command failed: Operation not supported (-95)
+```
+
+This is now a measured fact, not an estimate. The vendor driver does not
+advertise monitor mode and the kernel refuses to create the interface. **No
+amount of userland tooling changes this** — it needs a different driver, which
+needs a different kernel, which is M2.
+
+### What does work, confirmed
+
+- **`AF_PACKET` capture on the managed interface.** `tcpdump -i wlan0` captured
+  live mDNS traffic with zero dropped packets. The M1 capture claim holds.
+- **ext4 is in the stock kernel** (`/proc/filesystems`), so the LimenOS root
+  partition mounts natively.
+- **A full Debian trixie arm64 chroot runs**: 455 packages, `uname -m` =
+  `aarch64`, with `nmap`, `tcpdump`, `scapy`, `iw`, `tmux`, `binwalk` and
+  `flashrom` all present and executing.
+- **Root code execution from the SD card at boot** via the vendor's own
+  `${CUSTOMER_DIR}/app/MainUI` hook, with the console still booting normally.
+
+### Corrections to earlier assumptions
+
+- **`/mnt` is read-only.** The rootfs is squashfs, so a chroot mountpoint must
+  live on tmpfs (`/tmp`) or `/userdata`. `limen-chroot` defaulted to
+  `/mnt/limen` and could not work.
+- **Card mountpoints are not stable.** On this boot the FAT partitions landed
+  on `/mnt/sdcard` and `/media/sdcard2` — not `sdcard0`/`sdcard1`. Anything
+  that hunts for files by path must search, or find them by LABEL.
+- **The 32 MiB FAT boot partition mounted fine under Linux** even though macOS
+  refused it. Linux is lenient about the FAT32 cluster-count minimum; that is
+  not a reason to ship an out-of-spec filesystem, but no device was affected.
+- **The stock root password is `rockchip`**, the Rockchip BSP default, in
+  firmware `20250527210639`.

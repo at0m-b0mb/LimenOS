@@ -20,13 +20,19 @@ set -u
 
 ROOT_LABEL="${LIMEN_ROOT_LABEL:-LIMEN_ROOT}"
 DATA_LABEL="${LIMEN_DATA_LABEL:-LIMEN_DATA}"
-MNT="${LIMEN_MNT:-/mnt/limen}"
+# /mnt is READ-ONLY on this device: the stock rootfs is squashfs. The chroot
+# mountpoint has to live on a writable filesystem — /tmp is tmpfs, /userdata
+# is ext4. Discovered on hardware; /mnt/limen simply could not be created.
+MNT="${LIMEN_MNT:-/tmp/limen}"
 DATA_MNT="$MNT/data"
 
 say() { echo "[limen] $*"; }
 die() { echo "[limen] FATAL: $*" >&2; exit 1; }
 
 find_part() { # find_part LABEL
+    # By LABEL, never by path: card mountpoints are NOT stable on this device.
+    # On one boot the FAT partitions landed on /mnt/sdcard and /media/sdcard2
+    # rather than sdcard0/sdcard1.
     if command -v blkid >/dev/null 2>&1; then
         blkid 2>/dev/null | sed -n "s|^\([^:]*\):.*LABEL=\"$1\".*|\1|p" | head -1
     fi
