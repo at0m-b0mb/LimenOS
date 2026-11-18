@@ -12,11 +12,14 @@ from __future__ import annotations
 import json, os, sys
 from PIL import Image, ImageDraw, ImageFont
 
-PAPER   = (243, 241, 236, 255)
-SURFACE = (255, 255, 255, 255)
-INK     = (27, 24, 19, 255)
-RULE    = (220, 214, 201, 255)
-BRASS   = (122, 93, 24, 255)
+# Dark, to match the theme. The launcher shadows label text, which is
+# invisible on a dark background and reads as doubled text on a light one --
+# so every theme for this device is dark, and the app icons follow.
+PAPER   = (0, 0, 0, 255)
+SURFACE = (19, 19, 18, 255)
+INK     = (243, 240, 233, 255)
+RULE    = (61, 60, 56, 255)
+BRASS   = (217, 183, 92, 255)
 SERIF   = "/System/Library/Fonts/Supplemental/Iowan Old Style.ttc"
 SS, ICON = 4, 81
 

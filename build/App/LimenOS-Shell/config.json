@@ -1,0 +1,7 @@
+{
+ "label": "LimenOS Shell",
+ "icon": "icon.png",
+ "iconsel": "iconsel.png",
+ "launch": "launch.sh",
+ "description": "A terminal with an on-screen keyboard"
+}
