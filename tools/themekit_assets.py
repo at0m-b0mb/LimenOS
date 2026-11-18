@@ -13,7 +13,7 @@ from __future__ import annotations
 import os
 import math, os
 
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFont, ImageFilter
 
 PAPER   = (243, 241, 236, 255)
 SURFACE = (255, 255, 255, 255)
@@ -152,19 +152,23 @@ def nav_tile(path, kind, label, w, h, selected):
     d = ImageDraw.Draw(img)
     W, H = w * SS, h * SS
     pad = int(W * 0.045)
+    r = int(W * 0.10)
     if selected:
-        d.rounded_rectangle([pad, pad, W - pad, H - pad], radius=int(W * 0.10),
-                            fill=SURFACE, outline=BRASS, width=max(2, int(W * 0.022)))
-        fg, lab = BRASS, INK
-        d.rectangle([W * 0.34, H - pad - int(H * 0.030), W * 0.66, H - pad - int(H * 0.012)],
-                    fill=BRASS)
+        vgrad(d, [pad, pad, W - pad, H - pad], (44, 39, 26, 255), (18, 16, 12, 255))
+        gold_edge(d, [pad, pad, W - pad, H - pad], r, max(2, int(W * 0.020)))
+        lid(d, [pad, pad, W - pad, H - pad], r, SHINE, 0.34)
+        fg, lab = SHINE, INK
+        d.rounded_rectangle([W * 0.34, H - pad - int(H * 0.034), W * 0.66, H - pad - int(H * 0.016)],
+                            radius=int(W * 0.008), fill=SHINE)
     else:
         # The unselected card was a 1px RULE hairline on near-white paper and
         # all but vanished on the panel -- in a photo of the real screen only
         # the selected tile read as a card at all. Heavier stroke, stronger
         # colour: present, but still clearly secondary to the gold selection.
-        d.rounded_rectangle([pad, pad, W - pad, H - pad], radius=int(W * 0.10),
-                            fill=SURFACE, outline=RULE_S, width=max(2, int(W * 0.017)))
+        vgrad(d, [pad, pad, W - pad, H - pad], (27, 27, 25, 255), (13, 13, 12, 255))
+        d.rounded_rectangle([pad, pad, W - pad, H - pad], radius=r,
+                            outline=RULE_S, width=max(1, int(W * 0.012)))
+        lid(d, [pad, pad, W - pad, H - pad], r, (255, 255, 255, 255), 0.08)
         fg, lab = MUTED, MUTED
     # No baked label here either: MainUI draws the name itself, and two
     # labels in two faces is what made the UI look broken on the device.
@@ -336,3 +340,73 @@ def clear_png(path, w, h):
     """A fully transparent PNG, for slots that must occupy space but show
     nothing. An opaque fill in one of these reads as a stray bar."""
     _save(_new(w, h, CLEAR), w, h, path)
+
+
+# ===========================================================================
+# Depth.
+#
+# Flat fills with hairline borders are honest but lifeless on a 3.5" panel.
+# Everything below gives surfaces a direction of light: a lid that catches it,
+# a body that falls away, and a gold that behaves like metal rather than paint.
+# Restrained on purpose -- one accent, no glow for its own sake.
+# ===========================================================================
+def _mix(a, b, t):
+    return tuple(int(a[i] + (b[i] - a[i]) * t) for i in range(4))
+
+
+def vgrad(d, box, top, bottom, radius=0):
+    """Vertical gradient. Drawn as rows so it costs nothing at this size."""
+    x0, y0, x1, y1 = [int(v) for v in box]
+    h = max(1, y1 - y0)
+    for i in range(h):
+        d.rectangle([x0, y0 + i, x1, y0 + i + 1], fill=_mix(top, bottom, i / h))
+
+
+def vignette(img, strength=0.55, cx=0.30, cy=0.22):
+    """Lift one corner so true black is not a dead field.
+
+    Built as a small radial ramp and scaled up, which is smooth. The first
+    version sampled the full canvas in coarse steps and the steps were
+    visible as banding.
+    """
+    import math
+    W, H = img.size
+    SMALL = 64
+    ramp = Image.new("L", (SMALL, SMALL), 0)
+    rp = ramp.load()
+    maxd = math.hypot(max(cx, 1 - cx), max(cy, 1 - cy))
+    for y in range(SMALL):
+        for x in range(SMALL):
+            dist = math.hypot(x / SMALL - cx, y / SMALL - cy) / maxd
+            rp[x, y] = int(max(0.0, 1.0 - dist) ** 2.2 * 255)
+    ramp = ramp.resize((W, H), Image.BICUBIC).filter(ImageFilter.GaussianBlur(W / 90))
+    lift = Image.new("RGBA", (W, H), (255, 255, 255, 255))
+    lift.putalpha(ramp.point(lambda v: int(v * 0.105 * strength)))
+    img.alpha_composite(lift)
+
+
+def lid(d, box, radius, colour, alpha=0.5):
+    """A one-pixel highlight along the top edge: the lip that catches light."""
+    x0, y0, x1, y1 = [int(v) for v in box]
+    inset = int(radius * 0.45)
+    c = _mix((0, 0, 0, 0), colour, alpha)
+    d.rectangle([x0 + inset, y0, x1 - inset, y0 + max(1, (y1 - y0) // 120 + 1)], fill=c)
+
+
+def gold_edge(d, box, radius, w):
+    """A gold border that is brighter at the top, like a bevel."""
+    x0, y0, x1, y1 = [int(v) for v in box]
+    for i in range(w):
+        t = i / max(1, w)
+        d.rounded_rectangle([x0 + i, y0 + i, x1 - i, y1 - i], radius=max(0, int(radius - i)),
+                            outline=_mix(SHINE, BRASS, t), width=1)
+
+
+def spine(d, box, radius, colour, frac=0.62):
+    """A short vertical bar on the leading edge: where the eye lands first."""
+    x0, y0, x1, y1 = [int(v) for v in box]
+    h = (y1 - y0)
+    top = y0 + int(h * (1 - frac) / 2)
+    wdt = max(2, (x1 - x0) // 44)
+    d.rounded_rectangle([x0 + wdt, top, x0 + wdt * 3, top + int(h * frac)],
+                        radius=wdt, fill=colour)

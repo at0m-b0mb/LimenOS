@@ -76,11 +76,16 @@ def g_palette(d, W, H, fg, w):
     read unmistakably as a smiley face. Two offset rounded squares say
     "colour choice" without any chance of that.
     """
+    # Outline, like every other settings glyph. A solid gold fill made this
+    # the only filled icon in the list and it pulled the eye off the selected
+    # row. The accent is a small gold square inside, not the whole swatch.
     s = min(W, H) * 0.42
     d.rounded_rectangle([W/2 - s*0.95, H/2 - s*0.75, W/2 + s*0.15, H/2 + s*0.45],
                         radius=int(s*0.22), outline=fg, width=w)
     d.rounded_rectangle([W/2 - s*0.15, H/2 - s*0.45, W/2 + s*0.95, H/2 + s*0.75],
-                        radius=int(s*0.22), fill=A.BRASS)
+                        radius=int(s*0.22), outline=fg, width=w)
+    d.rounded_rectangle([W/2 + s*0.14, H/2 - s*0.14, W/2 + s*0.62, H/2 + s*0.42],
+                        radius=int(s*0.10), fill=A.BRASS)
 
 def g_power(d, W, H, fg, w):
     r = min(W, H) * 0.32

@@ -39,8 +39,8 @@
     },
     "grid": {
         "font": "limen.ttf",
-        "grid1x4": 18,
-        "grid3x4": 18,
+        "grid1x4": 19,
+        "grid3x4": 17,
         "color": "#F3F0E9",
         "selectedcolor": "#F3F0E9"
     },

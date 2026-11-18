@@ -107,83 +107,128 @@ def threshold(d, x, y, s, fill):
 
 # ---- the skin -------------------------------------------------------------
 def bg_main(w, h, path):
-    """Paper, a whisper of the mark, one gold hairline.
+    """True black, with a direction of light.
 
-    The first attempt drew the threshold in full RULE grey at 115% of the
-    screen height. On the list screens it showed between the rows and read as
-    a rendering fault rather than texture. A background has to sit *under* the
-    interface: it is now ~12% opacity and tucked into the lower right, where
-    the content does not sit.
+    A flat #000000 field reads as a dead screen. A soft lift toward the upper
+    left gives the panel somewhere to start, the threshold sits at the lower
+    right where no content goes, and a single gold hairline caps the top.
     """
-    img = canvas(w, h, PAPER)
-    gs = int(h * SS * 0.78)
+    import themekit_assets as A
+    img = canvas(w, h, (0, 0, 0, 255))
+    A.vignette(img, strength=0.62, cx=0.26, cy=0.18)
+
+    # The mark is a watermark, not a graphic. At 16% its hard rectangular
+    # jambs read as stray blocks sitting on the background; blurred and taken
+    # down to 6% it is texture you notice only if you look for it.
+    from PIL import ImageFilter
+    gs = int(h * SS * 0.86)
     g = Image.new("RGBA", (gs, gs), CLEAR)
     threshold(ImageDraw.Draw(g), 0, 0, gs, RULE)
-    g.putalpha(g.getchannel("A").point(lambda a: int(a * 0.12)))
-    img.alpha_composite(g, (int(w * SS - gs * 0.72), int(h * SS - gs * 0.80)))
+    g = g.filter(ImageFilter.GaussianBlur(gs / 46))
+    g.putalpha(g.getchannel("A").point(lambda v: int(v * 0.060)))
+    img.alpha_composite(g, (int(w * SS - gs * 0.68), int(h * SS - gs * 0.80)))
+
     d = ImageDraw.Draw(img)
-    # a single gold hairline along the top: the one accent
-    d.rectangle([0, 0, w * SS, max(1, int(2 * SS))], fill=BRASS)
+    # the hairline is brightest where the light is
+    for x in range(0, w * SS, max(1, w * SS // 160)):
+        t = abs(x / (w * SS) - 0.26)
+        d.rectangle([x, 0, x + w * SS // 160 + 1, max(1, int(2 * SS))],
+                    fill=A._mix(SHINE, BRASS, min(1.0, t * 1.6)))
     done(img, w, h, path)
 
 
 def bar(w, h, path, strong=False):
+    """Title and hint bars: a shallow gradient with a hairline foot."""
+    import themekit_assets as A
     img = canvas(w, h, CLEAR)
     d = ImageDraw.Draw(img)
-    d.rectangle([0, 0, w * SS, h * SS], fill=SURFACE if strong else PAPER)
-    d.rectangle([0, h * SS - max(1, int(1.5 * SS)), w * SS, h * SS], fill=RULE)
+    W, H = w * SS, h * SS
+    top = (26, 26, 24, 255) if strong else (14, 14, 13, 255)
+    bot = (10, 10, 9, 255) if strong else (0, 0, 0, 0)
+    A.vgrad(d, [0, 0, W, H], top, bot)
+    d.rectangle([0, H - max(1, int(1.2 * SS)), W, H], fill=RULE)
+    if strong:
+        A.lid(d, [0, 0, W, H], 0, (255, 255, 255, 255), 0.06)
     done(img, w, h, path)
 
 
-def list_item(w, h, path, selected=False, radius=8):
+def list_item(w, h, path, selected=False, radius=10):
+    """A row with a lit top edge; selection adds a gold bevel and a spine."""
+    import themekit_assets as A
     img = canvas(w, h, CLEAR)
     d = ImageDraw.Draw(img)
-    pad = int(6 * SS)
-    box = [pad, pad // 2, w * SS - pad, h * SS - pad // 2]
+    W, H = w * SS, h * SS
+    pad = int(5 * SS)
+    box = [pad, int(pad * 0.6), W - pad, H - int(pad * 0.6)]
+    r = radius * SS
     if selected:
-        rounded(d, box, radius * SS, fill=SURFACE, outline=BRASS, width=max(2, int(2 * SS)))
-        # gold tab on the leading edge marks the selection
-        d.rounded_rectangle([pad, pad // 2 + int(6 * SS), pad + int(5 * SS),
-                             h * SS - pad // 2 - int(6 * SS)],
-                            radius=int(2.5 * SS), fill=BRASS)
+        A.vgrad(d, box, (38, 34, 24, 255), (20, 18, 13, 255))
+        d.rounded_rectangle(box, radius=r, outline=None)
+        A.gold_edge(d, box, r, max(2, int(1.6 * SS)))
+        A.spine(d, box, r, BRASS)
+        A.lid(d, box, r, SHINE, 0.30)
     else:
-        rounded(d, box, radius * SS, fill=SURFACE, outline=RULE_STRONG, width=max(2, int(1.6 * SS)))
+        A.vgrad(d, box, (26, 26, 24, 255), (14, 14, 13, 255))
+        d.rounded_rectangle(box, radius=r, outline=RULE_STRONG, width=max(1, int(1.1 * SS)))
+        A.lid(d, box, r, (255, 255, 255, 255), 0.07)
     done(img, w, h, path)
 
 
 def game_card(w, h, path, selected=False):
+    """A tile. Selection is a gold bevel and a lit face, never a flat fill:
+    a solid gold block swallows the icon sitting on it."""
+    import themekit_assets as A
     img = canvas(w, h, CLEAR)
     d = ImageDraw.Draw(img)
+    W, H = w * SS, h * SS
     pad = int(4 * SS)
-    box = [pad, pad, w * SS - pad, h * SS - pad]
+    box = [pad, pad, W - pad, H - pad]
+    r = int(11 * SS)
     if selected:
-        rounded(d, box, int(10 * SS), fill=SURFACE, outline=BRASS, width=max(2, int(2.5 * SS)))
-        d.rectangle([int(w * SS * 0.30), h * SS - pad - int(5 * SS),
-                     int(w * SS * 0.70), h * SS - pad - int(1 * SS)], fill=BRASS)
+        A.vgrad(d, box, (42, 37, 25, 255), (18, 16, 12, 255))
+        A.gold_edge(d, box, r, max(2, int(2.0 * SS)))
+        A.lid(d, box, r, SHINE, 0.34)
+        d.rounded_rectangle([W * 0.32, H - pad - int(6 * SS), W * 0.68, H - pad - int(3 * SS)],
+                            radius=int(1.5 * SS), fill=SHINE)
     else:
-        rounded(d, box, int(10 * SS), fill=SURFACE, outline=RULE, width=max(1, int(1.2 * SS)))
+        A.vgrad(d, box, (27, 27, 25, 255), (13, 13, 12, 255))
+        d.rounded_rectangle(box, radius=r, outline=RULE_STRONG, width=max(1, int(1.2 * SS)))
+        A.lid(d, box, r, (255, 255, 255, 255), 0.08)
     done(img, w, h, path)
 
 
 def button(w, h, path, selected=False, radius=10):
+    import themekit_assets as A
     img = canvas(w, h, CLEAR)
     d = ImageDraw.Draw(img)
-    box = [int(1 * SS), int(1 * SS), w * SS - int(1 * SS), h * SS - int(1 * SS)]
+    W, H = w * SS, h * SS
+    box = [int(1.2 * SS), int(1.2 * SS), W - int(1.2 * SS), H - int(1.2 * SS)]
+    r = radius * SS
     if selected:
-        rounded(d, box, radius * SS, fill=BRASS)
+        A.vgrad(d, box, (236, 196, 86, 255), (176, 143, 56, 255))
+        A.gold_edge(d, box, r, max(1, int(1.0 * SS)))
     else:
-        rounded(d, box, radius * SS, fill=SURFACE, outline=RULE_STRONG, width=max(1, int(1.2 * SS)))
+        A.vgrad(d, box, (30, 30, 28, 255), (16, 16, 15, 255))
+        d.rounded_rectangle(box, radius=r, outline=RULE_STRONG, width=max(1, int(1.2 * SS)))
+        A.lid(d, box, r, (255, 255, 255, 255), 0.10)
     done(img, w, h, path)
 
 
 def popup(w, h, path):
+    """A raised panel: lit lid, graded body, gold tick at the head."""
+    import themekit_assets as A
     img = canvas(w, h, CLEAR)
     d = ImageDraw.Draw(img)
+    W, H = w * SS, h * SS
     pad = int(3 * SS)
-    rounded(d, [pad, pad, w * SS - pad, h * SS - pad], int(12 * SS),
-            fill=SURFACE, outline=RULE_STRONG, width=max(1, int(1.5 * SS)))
-    d.rectangle([pad + int(14 * SS), pad + int(10 * SS),
-                 pad + int(46 * SS), pad + int(13 * SS)], fill=BRASS)
+    box = [pad, pad, W - pad, H - pad]
+    r = int(13 * SS)
+    A.vgrad(d, box, (32, 32, 30, 255), (13, 13, 12, 255))
+    d.rounded_rectangle(box, radius=r, outline=RULE_STRONG, width=max(1, int(1.4 * SS)))
+    A.lid(d, box, r, (255, 255, 255, 255), 0.12)
+    d.rounded_rectangle([pad + int(16 * SS), pad + int(11 * SS),
+                         pad + int(48 * SS), pad + int(14 * SS)],
+                        radius=int(1.5 * SS), fill=BRASS)
     done(img, w, h, path)
 
 
@@ -325,16 +370,23 @@ def icon(key, path, selected=False):
     read as a rendering fault. hideIconTitle and hideLabels.icons did not
     suppress it. Icons are pictures; the launcher owns the words.
     """
+    import themekit_assets as A
     img = canvas(ICON_W, ICON_H, CLEAR)
     d = ImageDraw.Draw(img)
     pad = int(5 * SS)
     box = [pad, pad, ICON_W * SS - pad, ICON_H * SS - pad]
+    r = int(14 * SS)
     if selected:
-        rounded(d, box, int(14 * SS), fill=BRASS)
-        fg, rule = PAPER, PAPER
+        # a bevel, not a fill: solid gold behind a gold mark leaves nothing
+        A.vgrad(d, box, (44, 39, 26, 255), (18, 16, 12, 255))
+        A.gold_edge(d, box, r, max(2, int(1.8 * SS)))
+        A.lid(d, box, r, SHINE, 0.32)
+        fg, rule = SHINE, SHINE
     else:
-        rounded(d, box, int(14 * SS), fill=SURFACE, outline=RULE,
-                width=max(1, int(1.4 * SS)))
+        A.vgrad(d, box, (27, 27, 25, 255), (14, 14, 13, 255))
+        d.rounded_rectangle(box, radius=r, outline=RULE_STRONG,
+                            width=max(1, int(1.2 * SS)))
+        A.lid(d, box, r, (255, 255, 255, 255), 0.08)
         fg, rule = INK, BRASS
 
     cx = ICON_W * SS // 2
@@ -378,7 +430,7 @@ CONFIG = {
     # font" on the SELECTED item -- two sizes overlapping is exactly what that
     # looks like, and matching them makes any double draw invisible whatever
     # is causing it. Same reasoning for the two colours.
-    "grid":        {"font": "limen.ttf", "grid1x4": 18, "grid3x4": 18,
+    "grid":        {"font": "limen.ttf", "grid1x4": 19, "grid3x4": 17,
                     "color": "#F3F0E9", "selectedcolor": "#F3F0E9"},
     "list":        {"font": "limen.ttf", "size": 27, "color": "#F3F0E9"},
 }
